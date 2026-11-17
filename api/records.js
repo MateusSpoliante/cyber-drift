@@ -1,4 +1,4 @@
-import postgres from 'postgres';
+import { getDb } from './_db.js';
 
 const MAX_NAME_LENGTH = 15;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Banco não configurado. Defina DATABASE_URL.' });
-  const sql = postgres(process.env.DATABASE_URL, { ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10, prepare: false });
+  const sql = getDb();
   try {
     if (req.method === 'GET') {
       const period = ['all', 'daily', 'weekly', 'monthly'].includes(String(req.query?.period || 'all')) ? String(req.query?.period || 'all') : 'all';
