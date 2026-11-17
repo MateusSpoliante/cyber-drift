@@ -34,3 +34,8 @@ Esses itens exigem infraestrutura, assets e trabalho adicional; não devem ser c
 - APIs migradas do driver Neon para `postgres` (PostgreSQL padrão).
 - Conexão com SSL, uma conexão por instância serverless e prepared statements desativados para compatibilidade com pooler.
 - `.env.example` e instruções atualizados para Supabase.
+
+
+## Ranking por jogador
+- O ranking mantém apenas o melhor tempo de cada jogador/dispositivo, atualizando a mesma linha em vez de criar entradas repetidas.
+- A migração SQL remove duplicatas antigas por jogador e preserva o menor tempo.

@@ -58,3 +58,7 @@ Abrir apenas `index.html` diretamente funciona em modo local, mas não cria rank
 ## Segurança
 
 Nunca coloque `DATABASE_URL` no HTML. As APIs validam entradas, usam consultas parametrizadas e limitam o tamanho da telemetria recebida. Para produção pública, acrescente rate limiting confiável, monitoramento e validação antitrapaça no servidor.
+
+
+### Atualização: um recorde por jogador
+Se o banco já foi criado anteriormente, execute novamente o conteúdo atualizado de `db/schema.sql` no SQL Editor do Supabase. A migração preserva o melhor tempo de cada jogador e remove entradas duplicadas associadas ao mesmo perfil/dispositivo.

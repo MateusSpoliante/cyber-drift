@@ -38,3 +38,22 @@ CREATE INDEX IF NOT EXISTS records_player_id_idx ON records (player_id, created_
 
 ALTER TABLE records ADD COLUMN IF NOT EXISTS client_record_id UUID;
 CREATE UNIQUE INDEX IF NOT EXISTS records_client_record_id_uidx ON records (client_record_id);
+
+
+-- Um único recorde (melhor volta) por jogador/dispositivo.
+-- Remove duplicatas antigas, preservando o menor tempo de cada jogador.
+WITH ranked AS (
+  SELECT id, ROW_NUMBER() OVER (
+    PARTITION BY player_id
+    ORDER BY time_ms ASC, created_at ASC, id ASC
+  ) AS position
+  FROM records
+  WHERE player_id IS NOT NULL
+)
+DELETE FROM records r
+USING ranked d
+WHERE r.id = d.id AND d.position > 1;
+
+CREATE UNIQUE INDEX IF NOT EXISTS records_one_best_per_player_uidx
+  ON records (player_id)
+  WHERE player_id IS NOT NULL;

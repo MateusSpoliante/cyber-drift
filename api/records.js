@@ -70,8 +70,14 @@ export default async function handler(req, res) {
         RETURNING id, display_name AS "displayName", xp, races, best_time AS "bestTime", body_color AS "bodyColor", accent_color AS "accentColor"
       `;
       const player = players[0];
-      await sql`UPDATE records SET pilot_name = ${name} WHERE player_id = ${player.id}::uuid`;
-      await sql`INSERT INTO records (player_id, pilot_name, time_ms, ghost_data, client_record_id) VALUES (${player.id}::uuid, ${name}, ${timeMs}, ${JSON.stringify(ghost)}::jsonb, ${clientRecordId}::uuid) ON CONFLICT (client_record_id) DO NOTHING`;
+      await sql`INSERT INTO records (player_id, pilot_name, time_ms, ghost_data, client_record_id)
+        VALUES (${player.id}::uuid, ${name}, ${timeMs}, ${JSON.stringify(ghost)}::jsonb, ${clientRecordId}::uuid)
+        ON CONFLICT (player_id) WHERE player_id IS NOT NULL DO UPDATE SET
+          pilot_name = EXCLUDED.pilot_name,
+          time_ms = LEAST(records.time_ms, EXCLUDED.time_ms),
+          ghost_data = CASE WHEN EXCLUDED.time_ms < records.time_ms THEN EXCLUDED.ghost_data ELSE records.ghost_data END,
+          client_record_id = EXCLUDED.client_record_id,
+          created_at = CASE WHEN EXCLUDED.time_ms < records.time_ms THEN NOW() ELSE records.created_at END`;
       const records = await getTopRecords(sql, 'all');
       const rank = records.findIndex(r => r.playerId === player.id && Number(r.timeMs) === timeMs) + 1;
       return res.status(201).json({ player, records, rank: rank || null, ghostSamples: ghost.length });
