@@ -1268,7 +1268,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
             return result;
         }
 
-        function buildWorldAndTrack() {
+        function buildWorldAndTrack({ deferScenery = false } = {}) {
             if (trackWorld) {
                 trackWorld.traverse(obj => {
                     if (obj.geometry) obj.geometry.dispose();
@@ -1349,7 +1349,20 @@ import { VFXSystem } from './engine/VFXSystem.js';
 
             buildTrackRibbonMeshes(trackConfig);
             buildStartFinishAndSectorGates(trackConfig);
-            buildSceneryOutsideTrack(trackConfig);
+
+            if (deferScenery) {
+                // Let the first WebGL frame reach the browser before creating
+                // hundreds of decorative meshes. Skip stale work if the user
+                // changes circuit before the deferred task executes.
+                const worldForScenery = trackWorld;
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        if (trackWorld === worldForScenery) buildSceneryOutsideTrack(trackConfig);
+                    }, 0);
+                });
+            } else {
+                buildSceneryOutsideTrack(trackConfig);
+            }
         }
 
         function rebuildPhysicsTrack() {
@@ -2308,7 +2321,10 @@ import { VFXSystem } from './engine/VFXSystem.js';
             starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
             scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xbae6fd, size: 1.6 })));
 
-            buildWorldAndTrack();
+            // Start rendering before generating the decorative environment.
+            // The first frame can now appear while scenery is built afterwards.
+            startRenderLoop();
+            buildWorldAndTrack({ deferScenery: true });
 
             playerCar = createSportsCarMesh();
             scene.add(playerCar.mesh);
