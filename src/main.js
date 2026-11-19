@@ -1911,7 +1911,7 @@ import { VehicleController } from './engine/VehicleController.js';
                 player.velAngle = planarSpeed > 0.15
                     ? Math.atan2(velocity.x, velocity.z)
                     : player.heading;
-                player.speed = Math.abs(physicsVehicle.speedKmh) / SPEED_MULTIPLIER;
+                player.speed = physicsVehicle.speedKmh / SPEED_MULTIPLIER;
                 player.isDrifting = physicsVehicle.isDrifting ||
                     (keys.space && planarSpeed > 4 && Math.abs(physicsVehicle.slipAngle) > 0.12);
 
