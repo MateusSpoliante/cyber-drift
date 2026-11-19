@@ -1,3 +1,27 @@
+export const VEHICLE_GEOMETRY = Object.freeze({
+    spawnOffsetY: 0.56,
+    roadSurfaceOffsetY: 0.058,
+    chassisHalfWidth: 0.92,
+    chassisHalfHeight: 0.38,
+    chassisHalfLength: 2.05,
+    chassisColliderOffsetY: -0.12,
+    visualOffsetY: -0.502,
+    wheelCenterY: 0.49,
+    wheelRadius: 0.49
+});
+
+export function getVehicleVerticalAlignment() {
+    const g = VEHICLE_GEOMETRY;
+    const chassisBottomY = g.spawnOffsetY + g.chassisColliderOffsetY - g.chassisHalfHeight;
+    const visualRootY = g.spawnOffsetY + g.visualOffsetY;
+    const visualWheelBottomY = visualRootY + g.wheelCenterY - g.wheelRadius;
+    return {
+        chassisClearance: chassisBottomY - g.roadSurfaceOffsetY,
+        visualRootError: visualRootY - g.roadSurfaceOffsetY,
+        wheelBottomError: visualWheelBottomY - g.roadSurfaceOffsetY
+    };
+}
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 function approach(value, target, amount) {
