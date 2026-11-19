@@ -167,6 +167,7 @@ export function createSportsCarMesh() {
     ];
     const steerPivots = [];
     const spinMeshes = [];
+    const wheelPivots = [];
     wheelConfigs.forEach(cfg => {
         const pivot = new THREE.Group();
         pivot.position.set(cfg.x, cfg.y, cfg.z);
@@ -182,11 +183,12 @@ export function createSportsCarMesh() {
         wheelSpin.add(hub);
         pivot.add(wheelSpin);
         group.add(pivot);
+        wheelPivots.push(pivot);
         if (cfg.front) steerPivots.push(pivot);
         spinMeshes.push(wheelSpin);
     });
 
-    return { mesh: group, bodyMat, orangeMat, rimMat, underglowMat: underglow.material, tailMat, flameL, flameR, steerPivots, spinMeshes };
+    return { mesh: group, bodyMat, orangeMat, rimMat, underglowMat: underglow.material, tailMat, flameL, flameR, steerPivots, spinMeshes, wheelPivots };
 }
 
 /** Atualiza a apresentação do carro sem misturar isso com a simulação de direção. */
