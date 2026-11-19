@@ -62,7 +62,8 @@ export class VehicleController {
 
         this.vehicle = physics.world.createVehicleController(this.body);
         this.vehicle.indexUpAxis = 1;
-        this.vehicle.setIndexForwardAxis = 2;
+        // Mantém o eixo dianteiro padrão do Rapier. O índice só altera o sinal
+        // de currentVehicleSpeed; a direção real é definida pela orientação do chassi.
 
         WHEEL_LAYOUT.forEach((wheel, index) => {
             this.vehicle.addWheel(
