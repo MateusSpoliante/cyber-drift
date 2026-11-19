@@ -11,6 +11,8 @@ export class PhysicsWorld {
         this.fixedTimeStep = fixedTimeStep;
         this.world = new RAPIER.World(gravity);
         this.world.timestep = fixedTimeStep;
+        this.world.numSolverIterations = 6;
+        this.world.maxCcdSubsteps = 2;
         this.disposed = false;
     }
 
