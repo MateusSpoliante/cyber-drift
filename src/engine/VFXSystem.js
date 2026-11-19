@@ -31,6 +31,9 @@ export class VFXSystem {
             new THREE.BufferAttribute(this.skidPositions, 3).setUsage(THREE.DynamicDrawUsage)
         );
         this.skidGeometry.setDrawRange(0, 0);
+        // A conservative fixed bound avoids rescanning the entire trail buffer
+        // every time a new tyre mark is appended.
+        this.skidGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 2400);
         this.skidMaterial = new THREE.LineBasicMaterial({
             color: 0x17191c,
             transparent: true,
@@ -115,7 +118,6 @@ export class VFXSystem {
         this.skidCount++;
         this.skidGeometry.attributes.position.needsUpdate = true;
         this.skidGeometry.setDrawRange(0, this.skidCount * 2);
-        this.skidGeometry.computeBoundingSphere();
     }
 
     update(dt) {
