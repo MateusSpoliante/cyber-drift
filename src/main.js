@@ -2770,33 +2770,58 @@ import { VFXSystem } from './engine/VFXSystem.js';
             const button = document.getElementById('start-btn');
             const status = document.getElementById('auth-status');
             physicsInitPromise = (async () => {
+                let stage = 'preparando inicialização';
                 button.disabled = true;
                 button.textContent = 'INICIANDO FÍSICA...';
                 if (status) { status.textContent = 'Preparando física e veículo...'; status.className = 'text-[11px] text-cyan-300 mt-2'; }
                 try {
-                    if (physicsWorld) { try { physicsWorld.dispose(); } catch {} physicsWorld = null; }
+                    if (physicsWorld) {
+                        stage = 'encerrando mundo físico anterior';
+                        try { physicsWorld.dispose(); } catch (disposeError) { console.warn('[Cyber Drift] Limpeza anterior:', disposeError); }
+                        physicsWorld = null;
+                    }
                     physicsVehicle = null;
                     physicsTrackColliders = [];
                     physicsReady = false;
+
+                    stage = 'inicializando Rapier WASM';
                     physicsWorld = await PhysicsWorld.create({ fixedTimeStep: PHYSICS_FIXED_STEP });
+
+                    stage = 'criando chão físico';
                     physicsWorld.createGround({ size: 3200, height: -0.36, friction: 1.1 });
+
+                    stage = 'criando colisões da pista';
                     rebuildPhysicsTrack();
+
+                    stage = 'criando controlador e rodas do carro';
                     createPhysicsVehicle();
                     if (!physicsVehicle) throw new Error('O controlador do veículo não foi criado.');
+
+                    stage = 'posicionando carro na largada';
                     resetPlayerToStart();
                     physicsReady = true;
                     if (status && !authToken) { status.textContent = 'Física pronta. Entre na sua conta para iniciar a corrida.'; status.className = 'text-[11px] text-slate-300 mt-2'; }
                     updateStartButtonState();
+                    console.info('[Cyber Drift] Física inicializada com sucesso.');
                     return true;
                 } catch (error) {
-                    console.error('[Cyber Drift] Falha ao inicializar a física:', error);
+                    console.error('[Cyber Drift] Falha na etapa: ' + stage, error);
                     physicsReady = false;
-                    if (physicsWorld) { try { physicsWorld.dispose(); } catch {} physicsWorld = null; }
+                    if (physicsWorld) {
+                        try { physicsWorld.dispose(); } catch (disposeError) { console.warn('[Cyber Drift] Erro ao liberar mundo físico:', disposeError); }
+                        physicsWorld = null;
+                    }
                     physicsVehicle = null;
-                    if (status) { status.textContent = `Falha na física: ${error?.message || error}. Clique em “TENTAR INICIAR FÍSICA” para tentar novamente.`; status.className = 'text-[11px] text-red-300 mt-2'; }
+                    const detail = error?.message || String(error);
+                    if (status) {
+                        status.textContent = 'Falha na física (' + stage + '): ' + detail + '. A atualização do jogo pode ainda não estar publicada.';
+                        status.className = 'text-[11px] text-red-300 mt-2';
+                    }
                     updateStartButtonState();
                     return false;
-                } finally { physicsInitPromise = null; }
+                } finally {
+                    physicsInitPromise = null;
+                }
             })();
             return physicsInitPromise;
         }
