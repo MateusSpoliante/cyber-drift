@@ -35,11 +35,18 @@ export class VehicleController {
         this.tuning = { ...DEFAULT_TUNING, ...tuning };
         this.visual = visual;
         this.visualOffset = new THREE.Vector3(0, -0.56, 0);
-        this.input = { throttle: 0, brake: 0, steer: 0, handbrake: 0 };
+        this.input = { throttle: 0, reverse: 0, brake: 0, steer: 0, handbrake: 0 };
 
-        const { x, y, z } = spawn;
+        const { x, y, z, heading = 0 } = spawn;
+        const spawnRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), heading);
         const bodyDesc = this.RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(x, y, z)
+            .setRotation({
+                x: spawnRotation.x,
+                y: spawnRotation.y,
+                z: spawnRotation.z,
+                w: spawnRotation.w
+            })
             .setLinearDamping(0.08)
             .setAngularDamping(1.8)
             .setCanSleep(false)
@@ -85,6 +92,7 @@ export class VehicleController {
 
     setInput(input) {
         this.input.throttle = THREE.MathUtils.clamp(input.throttle ?? 0, 0, 1);
+        this.input.reverse = THREE.MathUtils.clamp(input.reverse ?? 0, 0, 1);
         this.input.brake = THREE.MathUtils.clamp(input.brake ?? 0, 0, 1);
         this.input.steer = THREE.MathUtils.clamp(input.steer ?? 0, -1, 1);
         this.input.handbrake = THREE.MathUtils.clamp(input.handbrake ?? 0, 0, 1);
@@ -97,7 +105,7 @@ export class VehicleController {
         const speed = this.vehicle.currentVehicleSpeed();
         const speedRatio = THREE.MathUtils.clamp(Math.abs(speed) / this.tuning.maxSpeed, 0, 1);
         const steerAngle = this.input.steer * this.tuning.maxSteerAngle * (1 - speedRatio * 0.35);
-        const engineForce = this.input.throttle * this.tuning.engineForce;
+        const engineForce = (this.input.throttle - this.input.reverse * 0.62) * this.tuning.engineForce;
         const brakeForce = this.input.brake * this.tuning.brakeForce + this.input.handbrake * this.tuning.brakeForce * 1.8;
         const rearGrip = this.input.handbrake > 0.1 ? this.tuning.driftSideFriction : this.tuning.sideFriction;
 
