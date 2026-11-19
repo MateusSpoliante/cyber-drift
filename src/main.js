@@ -2767,8 +2767,8 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
                     const rank = await saveNewRecord(nameVal, player.pendingRecordTimeMs, player.lastCompletedGhost || []);
                     recordSavedForPending = true;
                     saveStatus.textContent = lastSaveSynced
-                        ? `✓ RECORDE SALVO NO BANCO DE DADOS${rank ? ` — POSIÇÃO #${rank}` : ''}. ESCOLHA MENU PRINCIPAL OU NOVA VOLTA.`
-                        : '⚠ SEM CONEXÃO COM O BANCO: RECORDE GUARDADO E SERÁ ENVIADO AUTOMATICAMENTE ASSIM QUE A CONEXÃO VOLTAR.';
+                        ? '✓ RECORDE SALVO.'
+                        : '⚠ RECORDE SALVO LOCALMENTE. AGUARDANDO CONEXÃO.';
                     saveStatus.classList.toggle('text-red-300', !lastSaveSynced); saveStatus.classList.toggle('text-emerald-300', lastSaveSynced);
                     saveStatus.classList.remove('hidden');
                     saveButton.textContent = 'RECORDE SALVO';
