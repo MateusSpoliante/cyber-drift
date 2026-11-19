@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 
 const WHEEL_LAYOUT = [
-    { x: -1.35, y: 0.45, z:  1.48, front: true },
-    { x:  1.35, y: 0.45, z:  1.48, front: true },
-    { x: -1.38, y: 0.45, z: -1.72, front: false },
-    { x:  1.38, y: 0.45, z: -1.72, front: false }
+    { x: -1.35, y: -0.22, z:  1.48, front: true },
+    { x:  1.35, y: -0.22, z:  1.48, front: true },
+    { x: -1.38, y: -0.22, z: -1.72, front: false },
+    { x:  1.38, y: -0.22, z: -1.72, front: false }
 ];
 
 const DEFAULT_TUNING = {
@@ -12,12 +12,12 @@ const DEFAULT_TUNING = {
     engineForce: 10500,
     brakeForce: 1700,
     maxSteerAngle: 0.42,
-    suspensionRestLength: 0.34,
+    suspensionRestLength: 0.42,
     wheelRadius: 0.49,
     suspensionStiffness: 28,
     suspensionCompression: 4.4,
     suspensionRelaxation: 5.2,
-    maxSuspensionForce: 12000,
+    maxSuspensionForce: 16000,
     frictionSlip: 2.25,
     sideFriction: 1.15,
     driftSideFriction: 0.72,
@@ -119,7 +119,7 @@ export class VehicleController {
             this.vehicle.setWheelSideFrictionStiffness(i, i >= 2 ? rearGrip : this.tuning.sideFriction);
         }
 
-        this.vehicle.updateVehicle(dt);
+        this.vehicle.updateVehicle(dt, this.RAPIER.QueryFilterFlags?.EXCLUDE_DYNAMIC);
     }
 
     postStep() {
