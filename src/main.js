@@ -1215,6 +1215,47 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
             return crossings;
         }
 
+        function calculateTrackClearanceScales(samples, roadHalfWidth) {
+            const count = samples.length;
+            const scales = new Array(count).fill(1);
+            const minRouteGap = Math.max(18, Math.floor(count * 0.025));
+            const spread = 10;
+            const minCenterlineGap = roadHalfWidth * 2 + 5;
+
+            function applyLocalLimit(centerIndex, targetScale) {
+                for (let offset = -spread; offset <= spread; offset++) {
+                    const index = (centerIndex + offset + count) % count;
+                    const normalized = Math.abs(offset) / spread;
+                    const influence = 1 - normalized * normalized * (3 - 2 * normalized);
+                    const localScale = 1 - (1 - targetScale) * influence;
+                    scales[index] = Math.min(scales[index], localScale);
+                }
+            }
+
+            for (let i = 0; i < count; i++) {
+                const a = samples[i].pt;
+                for (let j = i + minRouteGap; j < count; j++) {
+                    const routeGap = Math.min(j - i, count - (j - i));
+                    if (routeGap < minRouteGap) continue;
+
+                    const b = samples[j].pt;
+                    // Grade-separated decks are allowed to overlap in the XZ projection.
+                    if (Math.abs(a.y - b.y) > 4) continue;
+
+                    const distance = Math.hypot(a.x - b.x, a.z - b.z);
+                    if (distance >= minCenterlineGap) continue;
+
+                    // Leave a safety gap between parallel pieces of track.
+                    const safeHalfWidth = Math.max(1.2, (distance - 3.0) * 0.5);
+                    const targetScale = Math.min(1, safeHalfWidth / roadHalfWidth);
+                    applyLocalLimit(i, targetScale);
+                    applyLocalLimit(j, targetScale);
+                }
+            }
+
+            return scales;
+        }
+
         function getGradeSeparationHeight(progress, crossings) {
             const height = 14;
             const deckHalfLength = 0.012;
@@ -1289,6 +1330,10 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
             for (const sample of trackSamples) {
                 sample.pt.y = getGradeSeparationHeight(sample.t, gradeSeparatedCrossings);
             }
+            const clearanceScales = calculateTrackClearanceScales(trackSamples, ROAD_HALF_WIDTH);
+            for (let i = 0; i < trackSamples.length; i++) {
+                trackSamples[i].clearanceScale = clearanceScales[i];
+            }
 
             // Build stable road frames. The old 1.47 miter expansion could create
             // spikes at tight turns; width now shrinks locally before offsets fold.
@@ -1334,7 +1379,7 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
                     // Keep the inside edge away from the curve's center of rotation.
                     const safeHalfWidth = Math.max(1.2, radius - 2.0);
                     const curvatureLimit = safeHalfWidth / ROAD_HALF_WIDTH;
-                    current.miterScale = Math.min(miterLimit, curvatureLimit);
+                    current.miterScale = Math.min(miterLimit, curvatureLimit, current.clearanceScale ?? 1);
                 }
             }
 
@@ -1908,7 +1953,7 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
                 if (hasPreferredT) {
                     const rawDelta = Math.abs(sample.t - preferredT);
                     const progressDelta = Math.min(rawDelta, 1 - rawDelta);
-                    if (progressDelta > 0.14) continue;
+                    if (progressDelta > 0.04) continue;
                 }
 
                 const dx = x - sample.pt.x;
