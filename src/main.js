@@ -1622,6 +1622,8 @@ import { VFXSystem } from './engine/VFXSystem.js';
                 const texA = createBuildingTexture('#00f0ff');
                 const texB = createBuildingTexture(theme === 'monaco' ? '#f59e0b' : '#FF6500');
                 const roofMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.8 });
+                const wallMatA = new THREE.MeshStandardMaterial({ map: texA, roughness: 0.52, metalness: 0.38 });
+                const wallMatB = new THREE.MeshStandardMaterial({ map: texB, roughness: 0.52, metalness: 0.38 });
                 const placedBuildings = [];
                 const maxBuildings = theme === 'monaco' ? 280 : 220;
 
@@ -1641,26 +1643,55 @@ import { VFXSystem } from './engine/VFXSystem.js';
                         if (dx * dx + dz * dz < (radius + b.r + 8) * (radius + b.r + 8)) { overlaps = true; break; }
                     }
                     if (overlaps) continue;
-                    placedBuildings.push({ x: rx, z: rz, r: radius });
+                    placedBuildings.push({
+                        x: rx, z: rz, r: radius, width, depth, height,
+                        accent: attempt % 3 === 0 ? 1 : 0
+                    });
+                }
 
-                    const wallTex = (attempt % 3 === 0) ? texB : texA;
-                    const bMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.52, metalness: 0.38 });
-                    const building = new THREE.Mesh(
-                        new THREE.BoxGeometry(width, height, depth),
-                        [bMat, bMat, roofMat, roofMat, bMat, bMat]
-                    );
-                    building.position.set(rx, height / 2, rz);
-                    building.castShadow = true;
-                    building.receiveShadow = true;
-                    trackWorld.add(building);
+                // Batch the skyline into a handful of InstancedMeshes instead
+                // of hundreds of independent draw calls.
+                const dummy = new THREE.Object3D();
+                const buildingGeometry = new THREE.BoxGeometry(1, 1, 1);
+                const crownGeometry = new THREE.BoxGeometry(1, 1, 1);
+                const variants = [
+                    { accent: 0, wall: wallMatA, crown: 0x00f0ff },
+                    { accent: 1, wall: wallMatB, crown: theme === 'monaco' ? 0xf59e0b : 0xFF6500 }
+                ];
 
-                    const crownColor = (attempt % 3 === 0) ? (theme === 'monaco' ? 0xf59e0b : 0xFF6500) : 0x00f0ff;
-                    const crown = new THREE.Mesh(
-                        new THREE.BoxGeometry(width + 0.6, 0.85, depth + 0.6),
-                        new THREE.MeshBasicMaterial({ color: crownColor })
+                for (const variant of variants) {
+                    const buildings = placedBuildings.filter(item => item.accent === variant.accent);
+                    if (!buildings.length) continue;
+
+                    const buildingMesh = new THREE.InstancedMesh(
+                        buildingGeometry,
+                        [variant.wall, variant.wall, roofMat, roofMat, variant.wall, variant.wall],
+                        buildings.length
                     );
-                    crown.position.set(rx, height - 1.4, rz);
-                    trackWorld.add(crown);
+                    const crownMesh = new THREE.InstancedMesh(
+                        crownGeometry,
+                        new THREE.MeshBasicMaterial({ color: variant.crown }),
+                        buildings.length
+                    );
+
+                    buildings.forEach((building, index) => {
+                        dummy.position.set(building.x, building.height / 2, building.z);
+                        dummy.rotation.set(0, 0, 0);
+                        dummy.scale.set(building.width, building.height, building.depth);
+                        dummy.updateMatrix();
+                        buildingMesh.setMatrixAt(index, dummy.matrix);
+
+                        dummy.position.set(building.x, building.height - 1.4, building.z);
+                        dummy.scale.set(building.width + 0.6, 0.85, building.depth + 0.6);
+                        dummy.updateMatrix();
+                        crownMesh.setMatrixAt(index, dummy.matrix);
+                    });
+
+                    buildingMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+                    crownMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+                    buildingMesh.instanceMatrix.needsUpdate = true;
+                    crownMesh.instanceMatrix.needsUpdate = true;
+                    trackWorld.add(buildingMesh, crownMesh);
                 }
             }
 
