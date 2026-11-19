@@ -79,7 +79,7 @@ export function buildTrackGeometry({
 
         // Curvature never changes the track width. Only a real nearby
         // self-crossing/parallel section may apply a controlled clearance trim.
-        const clearance = clamp(Number.isFinite(sample.clearanceScale) ? sample.clearanceScale : 1, 0.72, 1);
+        const clearance = clamp(Number.isFinite(sample.clearanceScale) ? sample.clearanceScale : 1, 0.06, 1);
         const half = roadHalfWidth * clearance;
         const curb = curbWidth * clearance;
         const center = sample.pt;
