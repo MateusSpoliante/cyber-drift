@@ -234,38 +234,34 @@
     }
 }
 
-/* HUD fixo: atualizações numéricas não alteram dimensões nem posição dos painéis. */
+/* HUD estável: dimensões e colunas independentes dos números atualizados. */
 #hud-top-left {
-    width: 600px;
+    width: min(620px, calc(100vw - 16px));
     max-width: calc(100vw - 16px);
 }
 .hud-main-timing-panel {
-    width: 600px !important;
-    min-width: 600px;
-    max-width: calc(100vw - 16px);
+    box-sizing: border-box;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100%;
+    overflow: hidden;
     contain: layout paint;
 }
 .hud-main-timing-panel > .flex.items-center.space-x-5 {
-    display: flex !important;
-    flex-flow: row nowrap !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr) 1px minmax(0, 1fr) 1px 58px;
     align-items: center;
-    justify-content: space-between;
-    gap: 0 !important;
+    column-gap: 12px !important;
     width: 100%;
     min-width: 0;
 }
 .hud-main-timing-panel > .flex.items-center.space-x-5 > * {
-    flex: 0 0 auto !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-}
-.hud-main-timing-panel > .flex.items-center.space-x-5 > div:not(.h-9) {
-    width: 145px;
-    min-width: 145px;
+    min-width: 0;
+    margin: 0 !important;
 }
 .hud-main-timing-panel > .flex.items-center.space-x-5 > .h-9 {
     width: 1px;
-    min-width: 1px;
+    height: 36px;
 }
 #timer-display, #best-display, #wr-display {
     display: block;
@@ -275,31 +271,34 @@
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
-    contain: layout;
 }
 #lap-display {
     display: block;
-    width: 3ch;
-    min-width: 3ch;
+    width: 4ch;
+    min-width: 4ch;
     text-align: center;
     font-variant-numeric: tabular-nums;
 }
 .hud-speed-panel {
+    box-sizing: border-box;
     width: 456px !important;
     min-width: 456px;
     max-width: 456px;
+    overflow: hidden;
     contain: layout paint;
 }
 .hud-speed-content {
     display: flex !important;
     flex-flow: row nowrap !important;
     align-items: center;
-    gap: 20px !important;
-    white-space: nowrap;
+    justify-content: space-between;
+    gap: 16px !important;
+    width: 100%;
+    min-width: 0;
 }
 .hud-speed-content > * {
     flex: 0 0 auto !important;
-    margin-left: 0 !important;
+    margin: 0 !important;
 }
 .hud-speed-content > div:first-child {
     width: 150px;
@@ -322,29 +321,25 @@
     display: inline-block;
     width: 15ch;
     min-width: 15ch;
-    text-align: right;
-    white-space: nowrap;
+    max-width: 15ch;
     overflow: hidden;
-    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 @media (max-width: 900px) {
     #hud-top-left { width: calc(100vw - 16px); }
-    .hud-main-timing-panel {
-        width: 100% !important;
-        min-width: 0;
-    }
+    .hud-main-timing-panel { padding: 10px 12px !important; }
     .hud-main-timing-panel > .flex.items-center.space-x-5 {
-        gap: 8px !important;
-        justify-content: flex-start;
+        grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+        column-gap: 8px !important;
     }
-    .hud-main-timing-panel > .flex.items-center.space-x-5 > div:not(.h-9) {
-        width: 132px;
-        min-width: 132px;
+    .hud-main-timing-panel > .flex.items-center.space-x-5 > div:nth-child(n+4) {
+        display: none !important;
     }
     .hud-speed-panel {
         width: min(420px, calc(100vw - 132px)) !important;
         min-width: 0;
         max-width: min(420px, calc(100vw - 132px));
+        padding: 12px !important;
     }
     .hud-speed-content { gap: 10px !important; }
     .hud-speed-content > div:first-child { width: 118px; min-width: 118px; }
@@ -353,23 +348,13 @@
         min-width: 0;
         max-width: min(180px, 42vw);
     }
-    #nitro-text { width: 12ch; min-width: 12ch; }
+    #nitro-text { width: 12ch; min-width: 12ch; max-width: 12ch; }
 }
 @media (max-width: 560px) {
-    .hud-main-timing-panel { padding: 10px 12px !important; }
     .hud-main-timing-panel > .flex.items-center.space-x-5 {
-        gap: 6px !important;
+        column-gap: 6px !important;
     }
-    .hud-main-timing-panel > .flex.items-center.space-x-5 > div:nth-child(5),
-    .hud-main-timing-panel > .flex.items-center.space-x-5 > div:nth-child(6),
-    .hud-main-timing-panel > .flex.items-center.space-x-5 > div:nth-child(7) {
-        display: none !important;
-    }
-    .hud-main-timing-panel > .flex.items-center.space-x-5 > div:not(.h-9) {
-        width: 132px;
-        min-width: 132px;
-    }
-    #timer-display, #best-display { width: 9ch; min-width: 9ch; max-width: 9ch; }
+    #timer-display { font-size: 22px !important; }
     .hud-speed-panel {
         width: min(340px, calc(100vw - 110px)) !important;
         min-width: 0;
@@ -384,5 +369,5 @@
         min-width: 0;
         max-width: 132px;
     }
-    #nitro-text { width: 10ch; min-width: 10ch; }
+    #nitro-text { width: 10ch; min-width: 10ch; max-width: 10ch; }
 }
