@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { stepArcadeVehicle } from './arcadeVehicleMath.js';
+import { stepArcadeVehicle, VEHICLE_GEOMETRY } from './arcadeVehicleMath.js';
 
 const DEFAULT_TUNING = {
     mass: 1050,
@@ -29,7 +29,7 @@ export class VehicleController {
         this.visual = visual;
         // The chassis bottom is 0.50 m below its origin. The visual model is
         // aligned to the same road height, both on asphalt and on the ground.
-        this.visualOffset = new THREE.Vector3(0, -0.502, 0);
+        this.visualOffset = new THREE.Vector3(0, VEHICLE_GEOMETRY.visualOffsetY, 0);
         this.input = { throttle: 0, reverse: 0, brake: 0, steer: 0, handbrake: 0 };
         this.yaw = spawn.heading ?? 0;
         this.steerAngle = 0;
@@ -53,8 +53,12 @@ export class VehicleController {
             .setCcdEnabled(true);
 
         this.body = physics.world.createRigidBody(bodyDesc);
-        const chassisCollider = this.RAPIER.ColliderDesc.cuboid(0.92, 0.38, 2.05)
-            .setTranslation(0, -0.12, 0)
+        const chassisCollider = this.RAPIER.ColliderDesc.cuboid(
+            VEHICLE_GEOMETRY.chassisHalfWidth,
+            VEHICLE_GEOMETRY.chassisHalfHeight,
+            VEHICLE_GEOMETRY.chassisHalfLength
+        )
+            .setTranslation(0, VEHICLE_GEOMETRY.chassisColliderOffsetY, 0)
             .setMass(this.tuning.mass)
             .setFriction(1.1)
             .setRestitution(0.02);
@@ -153,7 +157,7 @@ export class VehicleController {
             pivot.rotation.y = this.steerAngle;
         });
         this.visual.wheelPivots?.forEach((pivot, index) => {
-            pivot.position.y = 0.49;
+            pivot.position.y = VEHICLE_GEOMETRY.wheelCenterY;
             if (index < 2) pivot.rotation.y = this.steerAngle;
         });
         this.visual.spinMeshes?.forEach(mesh => {
