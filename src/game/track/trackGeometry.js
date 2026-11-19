@@ -95,27 +95,28 @@ export function buildTrackGeometry({
             const roadA = i * 2;
             const roadB = (i + 1) * 2;
             // Counter-clockwise winding when viewed from above: normals point +Y.
+            // Winding anticlockwise from above so computed normals point toward +Y.
             roadIndices.push(
-                roadA, roadB, roadA + 1,
-                roadA + 1, roadB, roadB + 1
+                roadA, roadA + 1, roadB,
+                roadA + 1, roadB + 1, roadB
             );
 
             const g = i * 4;
             const gn = (i + 1) * 4;
             gravelIndices.push(
-                g, gn, g + 1,
-                g + 1, gn, gn + 1,
-                g + 2, gn + 2, g + 3,
-                g + 3, gn + 2, gn + 3
+                g, g + 1, gn,
+                g + 1, gn + 1, gn,
+                g + 2, g + 3, gn + 2,
+                g + 3, gn + 3, gn + 2
             );
 
             const c = i * 4;
             const cn = (i + 1) * 4;
             curbIndices.push(
-                c, cn, c + 1,
-                c + 1, cn, cn + 1,
-                c + 2, cn + 2, c + 3,
-                c + 3, cn + 2, cn + 3
+                c, c + 1, cn,
+                c + 1, cn + 1, cn,
+                c + 2, c + 3, cn + 2,
+                c + 3, cn + 3, cn + 2
             );
 
             for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
@@ -145,7 +146,6 @@ export function buildTrackGeometry({
             color: 0x9a8060,
             roughness: 1,
             metalness: 0,
-            side: THREE.DoubleSide
         })
     );
     gravel.receiveShadow = true;
@@ -158,7 +158,6 @@ export function buildTrackGeometry({
             map: createAsphaltTexture(trackConfig.theme),
             roughness: 0.76,
             metalness: 0.12,
-            side: THREE.DoubleSide
         })
     );
     road.receiveShadow = true;
@@ -170,7 +169,6 @@ export function buildTrackGeometry({
         new THREE.MeshStandardMaterial({
             vertexColors: true,
             roughness: 0.62,
-            side: THREE.DoubleSide
         })
     );
     curbs.receiveShadow = true;

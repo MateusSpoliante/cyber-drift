@@ -1,3 +1,4 @@
+import './styles.css';
 import { buildTrackGeometry } from './game/track/trackGeometry.js';
 // ==========================================
         // 1. F1-INSPIRED CIRCUITS & TRACK CONFIGS
@@ -995,7 +996,7 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
             canvas.height = 512;
             const ctx = canvas.getContext('2d');
 
-            ctx.fillStyle = theme === 'desert' ? '#24211e' : theme === 'alpine' ? '#1c2430' : '#141822';
+            ctx.fillStyle = theme === 'desert' ? '#292621' : theme === 'alpine' ? '#222a32' : theme === 'suzuka' ? '#202733' : '#1f2731';
             ctx.fillRect(0, 0, 512, 512);
 
             for (let i = 0; i < 16000; i++) {
@@ -1039,10 +1040,11 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
             canvas.height = 256;
             const ctx = canvas.getContext('2d');
 
-            const base = theme === 'desert' ? '#3d2817' :
-                         theme === 'alpine' ? '#172620' :
-                         theme === 'airfield' ? '#12221a' :
-                         theme === 'suzuka' ? '#181326' : '#090d15';
+            const base = theme === 'desert' ? '#5a432b' :
+                         theme === 'alpine' ? '#34483a' :
+                         theme === 'airfield' ? '#35442f' :
+                         theme === 'suzuka' ? '#303346' :
+                         theme === 'harbor' ? '#18323c' : '#27313d';
             ctx.fillStyle = base;
             ctx.fillRect(0, 0, 256, 256);
 
