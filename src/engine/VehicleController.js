@@ -9,8 +9,8 @@ const WHEEL_LAYOUT = [
 
 const DEFAULT_TUNING = {
     mass: 1050,
-    engineForce: 2600,
-    brakeForce: 95,
+    engineForce: 10500,
+    brakeForce: 190,
     maxSteerAngle: 0.42,
     suspensionRestLength: 0.34,
     wheelRadius: 0.36,
@@ -21,7 +21,7 @@ const DEFAULT_TUNING = {
     frictionSlip: 2.25,
     sideFriction: 1.15,
     driftSideFriction: 0.72,
-    maxSpeed: 78
+    maxSpeed: 112
 };
 
 export class VehicleController {
@@ -165,6 +165,23 @@ export class VehicleController {
                 this.visual.spinMeshes[index].rotation.x = wheelRotation;
             }
         }
+    }
+
+    reset(position, heading = 0) {
+        const rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), heading);
+        this.body.setTranslation({ x: position.x, y: position.y, z: position.z }, true);
+        this.body.setRotation({ x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w }, true);
+        this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        this.previousPosition.set(position.x, position.y, position.z);
+        this.currentPosition.copy(this.previousPosition);
+        this.previousRotation.copy(rotation);
+        this.currentRotation.copy(rotation);
+        this.velocity.set(0, 0, 0);
+        this.speedKmh = 0;
+        this.slipAngle = 0;
+        this.isDrifting = false;
+        this.setInput({});
     }
 
     getWheelState(index) {
