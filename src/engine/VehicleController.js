@@ -141,10 +141,20 @@ export class VehicleController {
                 pivot.rotation.y = this.vehicle.wheelSteering(index) ?? 0;
             });
         }
-        if (this.visual.spinMeshes) {
-            this.visual.spinMeshes.forEach((wheel, index) => {
-                wheel.rotation.x = this.vehicle.wheelRotation(index) ?? 0;
-            });
+        for (let index = 0; index < 4; index++) {
+            const suspensionLength = this.vehicle.wheelSuspensionLength(index);
+            const wheelSteering = this.vehicle.wheelSteering(index) ?? 0;
+            const wheelRotation = this.vehicle.wheelRotation(index) ?? 0;
+
+            if (this.visual.wheelPivots?.[index] && Number.isFinite(suspensionLength)) {
+                this.visual.wheelPivots[index].position.y = 0.83 - suspensionLength;
+            }
+            if (this.visual.wheelPivots?.[index] && index < 2) {
+                this.visual.wheelPivots[index].rotation.y = wheelSteering;
+            }
+            if (this.visual.spinMeshes?.[index]) {
+                this.visual.spinMeshes[index].rotation.x = wheelRotation;
+            }
         }
     }
 
