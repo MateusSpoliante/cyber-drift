@@ -82,6 +82,11 @@ export class VFXSystem {
         for (let i = 0; i < this.smokeCount; i++) {
             if (this.smokeLife[i] <= 0) continue;
             this.smokeLife[i] = Math.max(0, this.smokeLife[i] - dt * 0.72);
+            if (this.smokeLife[i] === 0) {
+                this.smokePositions[i].set(0, -10000, 0);
+                this.writeSmokeMatrix(i, 0.001);
+                continue;
+            }
             this.smokePositions[i].addScaledVector(this.smokeVelocity[i], dt);
             const age = 1 - this.smokeLife[i];
             this.writeSmokeMatrix(i, 0.18 + age * 0.85);
