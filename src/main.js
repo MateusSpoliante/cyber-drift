@@ -983,6 +983,8 @@ import { VFXSystem } from './engine/VFXSystem.js';
         let cameraMode = 0; // 0: Chase Close, 1: Chase Far, 2: Hood Cam
         const CAMERA_NAMES = ['PERSEGUIÇÃO', 'AÉREA DISTANTE', 'CAPÔ (PRIMEIRA PESSOA)'];
 
+        const vehicleEulerScratch = new THREE.Euler();
+        const trackRelativeScratch = new THREE.Vector3();
         const player = {
             pos: new THREE.Vector3(),
             heading: 0,
@@ -2020,11 +2022,8 @@ import { VFXSystem } from './engine/VFXSystem.js';
 
                 physicsVehicle.syncVisual(physicsAccumulator / PHYSICS_FIXED_STEP);
                 player.pos.copy(playerCar.mesh.position);
-                const vehicleEuler = new THREE.Euler().setFromQuaternion(
-                    physicsVehicle.currentRotation,
-                    'YXZ'
-                );
-                player.heading = vehicleEuler.y;
+                vehicleEulerScratch.setFromQuaternion(physicsVehicle.currentRotation, 'YXZ');
+                player.heading = vehicleEulerScratch.y;
                 const velocity = physicsVehicle.velocity;
                 const planarSpeed = Math.hypot(velocity.x, velocity.z);
                 player.velAngle = planarSpeed > 0.15
@@ -2035,12 +2034,12 @@ import { VFXSystem } from './engine/VFXSystem.js';
                     (keys.space && planarSpeed > 4 && Math.abs(physicsVehicle.slipAngle) > 0.12);
 
                 const nearestForGrip = findNearestTrackSample(player.pos.x, player.pos.z, player.trackT);
-                const relative = new THREE.Vector3(
+                trackRelativeScratch.set(
                     player.pos.x - nearestForGrip.pt.x,
                     0,
                     player.pos.z - nearestForGrip.pt.z
                 );
-                const lateral = relative.dot(nearestForGrip.right);
+                const lateral = trackRelativeScratch.dot(nearestForGrip.right);
                 const localScale = nearestForGrip.miterScale || 1;
                 const roadEdge = ROAD_HALF_WIDTH * localScale;
                 const runoff = Math.max(0, Math.abs(lateral) - roadEdge);
