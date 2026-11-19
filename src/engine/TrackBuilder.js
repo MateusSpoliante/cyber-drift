@@ -32,7 +32,7 @@ export class TrackBuilder {
             const tangent = curve.getTangentAt(t).normalize();
             const horizontalRight = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
             const curvature = this.measureCurvature(curve, t);
-            const bankAngle = THREE.MathUtils.clamp(curvature * this.banking, -0.24, 0.24);
+            const bankAngle = THREE.MathUtils.clamp(curvature * 8 * this.banking, -0.24, 0.24);
             const up = new THREE.Vector3(0, 1, 0).applyAxisAngle(tangent, bankAngle).normalize();
             const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
             const halfWidth = this.width * 0.5;
@@ -45,8 +45,8 @@ export class TrackBuilder {
 
             if (i < this.samples) {
                 const a = i * 2;
-                indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
-                indicesForPhysics.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+                indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+                indicesForPhysics.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
             }
 
             frames.push({ center, tangent, right, up, bankAngle, t });
@@ -85,7 +85,8 @@ export class TrackBuilder {
         const delta = 0.002;
         const before = curve.getTangentAt((t - delta + 1) % 1);
         const after = curve.getTangentAt((t + delta) % 1);
-        return before.angleTo(after) / Math.max(0.001, delta * 2);
+        const distance = curve.getLength() * delta * 2;
+        return before.angleTo(after) / Math.max(0.001, distance);
     }
 
     addKerbs(frames) {
