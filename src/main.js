@@ -1949,13 +1949,6 @@ import { VFXSystem } from './engine/VFXSystem.js';
         }
 
         function updatePlayerPhysics(dt) {
-            if (!timerStarted && keys.w) {
-                timerStarted = true;
-                player.lapStartTime = performance.now();
-                player.sector1Done = false; player.sector2Done = false;
-                showToast('CRONÔMETRO INICIADO');
-            }
-
             const nitroInput = keys.shift || keys.n;
             if (!nitroInput) player.nitroArmed = true;
             if (player.nitroLock > 0) player.nitroLock = Math.max(0, player.nitroLock - dt);
@@ -1982,9 +1975,8 @@ import { VFXSystem } from './engine/VFXSystem.js';
                 setSpeedLinesActive(false);
             }
 
-            // Rapier owns the active vehicle dynamics. Inputs are collected at
-            // render rate, while suspension, wheel forces and collisions run at
-            // a deterministic 120 Hz fixed timestep.
+            // Inputs are collected at render rate; deterministic arcade vehicle
+            // motion and Rapier collision resolution run at a fixed 120 Hz.
             const targetSteer = (keys.a ? 1 : 0) - (keys.d ? 1 : 0);
             const steerResponsiveness = player.isDrifting ? 15.5 : 13.5;
             player.steerInput += (targetSteer - player.steerInput) * Math.min(1, dt * steerResponsiveness);
@@ -2008,8 +2000,6 @@ import { VFXSystem } from './engine/VFXSystem.js';
                 );
                 let substeps = 0;
                 while (physicsAccumulator >= PHYSICS_FIXED_STEP && substeps < 8) {
-                    const speedRatio = Math.min(1, Math.abs(physicsVehicle.speedKmh) / 400);
-                    physicsVehicle.body.setLinearDamping(0.08 + speedRatio * speedRatio * 0.72);
                     physicsVehicle.preStep(PHYSICS_FIXED_STEP);
                     physicsWorld.step(PHYSICS_FIXED_STEP);
                     physicsVehicle.postStep();
@@ -2027,6 +2017,17 @@ import { VFXSystem } from './engine/VFXSystem.js';
                     ? Math.atan2(velocity.x, velocity.z)
                     : player.heading;
                 player.speed = physicsVehicle.speedKmh / SPEED_MULTIPLIER;
+
+                // Start the lap clock only after the car has actually begun
+                // moving forward, not merely because W was pressed.
+                if (!timerStarted && keys.w && physicsVehicle.speedKmh > 2) {
+                    timerStarted = true;
+                    player.lapStartTime = performance.now();
+                    player.sector1Done = false;
+                    player.sector2Done = false;
+                    showToast('CRONÔMETRO INICIADO');
+                }
+
                 player.isDrifting = physicsVehicle.isDrifting ||
                     (keys.space && planarSpeed > 4 && Math.abs(physicsVehicle.slipAngle) > 0.12);
 
