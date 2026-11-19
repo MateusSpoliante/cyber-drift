@@ -62,7 +62,7 @@ export class VehicleController {
 
         this.vehicle = physics.world.createVehicleController(this.body);
         this.vehicle.indexUpAxis = 1;
-        this.vehicle.indexForwardAxis = 2;
+        this.vehicle.setIndexForwardAxis = 2;
 
         WHEEL_LAYOUT.forEach((wheel, index) => {
             this.vehicle.addWheel(
