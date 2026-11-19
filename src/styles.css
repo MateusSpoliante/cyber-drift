@@ -51,10 +51,10 @@
             display: block;
         }
         .cyber-panel {
-            background: linear-gradient(160deg, rgba(11, 15, 24, 0.92) 0%, rgba(7, 10, 17, 0.95) 100%);
-            backdrop-filter: blur(14px);
+            background: linear-gradient(160deg, rgba(11, 15, 24, 0.97) 0%, rgba(7, 10, 17, 0.98) 100%);
+            /* Avoid full-screen backdrop-filter compositing on the game canvas. */
             border: 1px solid rgba(0, 240, 255, 0.34);
-            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            box-shadow: 0 8px 22px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.05);
         }
         .cyber-card {
             background: rgba(13, 18, 29, 0.85);
