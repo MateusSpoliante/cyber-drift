@@ -76,10 +76,14 @@ Esses itens exigem infraestrutura, assets e trabalho adicional; não devem ser c
 ## Circuitos reais, física progressiva e otimização — 2026-11-19
 
 - Substituídos os sete traçados genéricos por linhas centrais geográficas baseadas nos layouts de Monza, Interlagos, Marina Bay, Silverstone, Spa-Francorchamps, Suzuka e Mônaco. Cada circuito mantém proporção e sequência de curvas próprias; Suzuka preserva o desenho característico em oito.
-- Aplicada interpolação centrípeta para reduzir overshoot e deformações em curvas fechadas.
-- Áreas de escape e posição das barreiras agora variam por circuito: amplas nos autódromos permanentes e estreitas nos circuitos urbanos. Sair do asfalto também reduz progressivamente a velocidade.
-- Aceleração agora é gradual, com entrega de torque que diminui conforme a velocidade e resistência aerodinâmica quadrática. A frenagem é progressiva e a velocidade excedente do ERS cai naturalmente, sem corte brusco ao terminar o boost.
-- Zebras, muros e barras de proteção passaram a usar `THREE.InstancedMesh`, reduzindo milhares de objetos individuais a quatro lotes de renderização.
-- HUD e minimapa atualizam em frequências menores, mantendo a simulação, câmera e renderização no ciclo normal de quadros.
-- Sombras suavizadas com resolução reduzida para aliviar a GPU.
+- Largura de pista e afastamento das barreiras ajustados individualmente, mantendo pistas urbanas estreitas e áreas laterais maiores nos autódromos permanentes.
+- Aceleração progressiva, entrega de torque decrescente com a velocidade, resistência aerodinâmica e frenagem gradual. A velocidade excedente do ERS diminui naturalmente ao terminar o boost.
+- HUD e minimapa atualizados em frequências menores, sem reduzir a frequência da simulação, câmera ou renderização.
+- Resolução do mapa de sombras reduzida para aliviar a GPU.
+- O gerador original de zebras e barreiras foi mantido para preservar compatibilidade com a versão Three.js já usada pelo projeto.
 - Incluída atribuição e licença dos dados geográficos dos circuitos em `THIRD_PARTY_NOTICES.md`.
+
+### Correção de inicialização — 2026-11-19
+
+- Removida a substituição do gerador de elementos da pista por malhas instanciadas, que introduzia uma falha de compatibilidade durante a montagem do mundo em algumas execuções.
+- Restaurado o modo de interpolação original do projeto; os novos pontos geográficos e as sete pistas continuam preservados.

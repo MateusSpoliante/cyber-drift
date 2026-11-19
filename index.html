@@ -1664,7 +1664,7 @@
             trackWorld.add(ground);
 
             const controlPoints = trackConfig.points.map(([x, z]) => new THREE.Vector3(x, 0, z));
-            trackCurve = new THREE.CatmullRomCurve3(controlPoints, true, 'centripetal');
+            trackCurve = new THREE.CatmullRomCurve3(controlPoints, true, 'catmullrom', trackConfig.tension);
 
             trackSamples = [];
             for (let i = 0; i < TRACK_SAMPLES_COUNT; i++) {
@@ -1725,28 +1725,6 @@
             roadGeo.setIndex(roadIndices);
             roadGeo.computeVertexNormals();
 
-            // Run-off areas are wide on permanent circuits and narrow on street circuits.
-            const runoffHalfWidth = Math.max(ROAD_HALF_WIDTH + 0.65, WALL_OFFSET - 1.0);
-            const runoffPositions = [];
-            for (let i = 0; i <= N; i++) {
-                const sample = trackSamples[i % N];
-                const left = sample.pt.clone().addScaledVector(sample.right, -runoffHalfWidth);
-                const right = sample.pt.clone().addScaledVector(sample.right, runoffHalfWidth);
-                runoffPositions.push(left.x, 0.018, left.z, right.x, 0.018, right.z);
-            }
-            const runoffGeo = new THREE.BufferGeometry();
-            runoffGeo.setAttribute('position', new THREE.Float32BufferAttribute(runoffPositions, 3));
-            runoffGeo.setIndex(roadIndices);
-            runoffGeo.computeVertexNormals();
-            const isStreetCircuit = ['urban', 'harbor', 'monaco'].includes(trackConfig.theme);
-            const runoffMat = new THREE.MeshStandardMaterial({
-                color: isStreetCircuit ? 0x303943 : 0x315d3b,
-                roughness: 0.98,
-                metalness: 0.02
-            });
-            const runoffMesh = new THREE.Mesh(runoffGeo, runoffMat);
-            runoffMesh.receiveShadow = true;
-            trackWorld.add(runoffMesh);
 
             const roadMat = new THREE.MeshStandardMaterial({
                 map: createAsphaltTexture(trackConfig.theme),
@@ -1764,50 +1742,37 @@
             const curbGeo = new THREE.BoxGeometry(1.45, 0.24, 3.6);
             const wallGeo = new THREE.BoxGeometry(1.0, 1.4, 3.8);
             const railGeo = new THREE.BoxGeometry(1.08, 0.16, 3.8);
-            const curbA = new THREE.InstancedMesh(curbGeo, curbMatA, N);
-            const curbB = new THREE.InstancedMesh(curbGeo, curbMatB, N);
-            const walls = new THREE.InstancedMesh(wallGeo, wallMat, N * 2);
-            const rails = new THREE.InstancedMesh(railGeo, neonRailMat, N);
-            [curbA, curbB, walls, rails].forEach(mesh => {
-                mesh.castShadow = true;
-                mesh.receiveShadow = true;
-                trackWorld.add(mesh);
-            });
-
-            const dummy = new THREE.Object3D();
-            let curbAIndex = 0, curbBIndex = 0, wallIndex = 0, railIndex = 0;
             for (let i = 0; i < N; i++) {
-                const sample = trackSamples[i];
+                const s = trackSamples[i];
                 const next = trackSamples[(i + 1) % N];
-                const mid = sample.pt.clone().add(next.pt).multiplyScalar(0.5);
-                const angle = Math.atan2(sample.tangent.x, sample.tangent.z);
-                const useA = Math.floor(i / 3) % 2 === 0;
+                const midPt = s.pt.clone().add(next.pt).multiplyScalar(0.5);
+                const angle = Math.atan2(s.tangent.x, s.tangent.z);
+                const isColorA = Math.floor(i / 3) % 2 === 0;
 
-                for (const side of [-1, 1]) {
-                    const curbPos = mid.clone().addScaledVector(sample.right, side * (ROAD_HALF_WIDTH + 0.5));
-                    dummy.position.set(curbPos.x, 0.12, curbPos.z);
-                    dummy.rotation.set(0, angle, 0);
-                    dummy.scale.set(1, 1, 1);
-                    dummy.updateMatrix();
-                    if (useA) curbA.setMatrixAt(curbAIndex++, dummy.matrix);
-                    else curbB.setMatrixAt(curbBIndex++, dummy.matrix);
+                [-1, 1].forEach(side => {
+                    const curbPos = midPt.clone().addScaledVector(s.right, side * (ROAD_HALF_WIDTH + 0.5));
+                    const curb = new THREE.Mesh(curbGeo, isColorA ? curbMatA : curbMatB);
+                    curb.position.set(curbPos.x, 0.12, curbPos.z);
+                    curb.rotation.y = angle;
+                    curb.receiveShadow = true;
+                    trackWorld.add(curb);
 
-                    const wallPos = mid.clone().addScaledVector(sample.right, side * WALL_OFFSET);
-                    dummy.position.set(wallPos.x, 0.7, wallPos.z);
-                    dummy.updateMatrix();
-                    walls.setMatrixAt(wallIndex++, dummy.matrix);
+                    const wallPos = midPt.clone().addScaledVector(s.right, side * WALL_OFFSET);
+                    const wall = new THREE.Mesh(wallGeo, wallMat);
+                    wall.position.set(wallPos.x, 0.7, wallPos.z);
+                    wall.rotation.y = angle;
+                    wall.castShadow = true;
+                    wall.receiveShadow = true;
+                    trackWorld.add(wall);
 
                     if (i % 2 === 0) {
-                        dummy.position.set(wallPos.x, 1.42, wallPos.z);
-                        dummy.updateMatrix();
-                        rails.setMatrixAt(railIndex++, dummy.matrix);
+                        const rail = new THREE.Mesh(railGeo, neonRailMat);
+                        rail.position.set(wallPos.x, 1.42, wallPos.z);
+                        rail.rotation.y = angle;
+                        trackWorld.add(rail);
                     }
-                }
+                });
             }
-            [curbA, curbB, walls, rails].forEach(mesh => {
-                mesh.instanceMatrix.needsUpdate = true;
-                mesh.computeBoundingSphere();
-            });
         }
 
         function buildStartFinishAndSectorGates(trackConfig) {
