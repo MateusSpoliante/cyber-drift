@@ -28,7 +28,7 @@ export default async function handler(req,res) {
       return res.status(200).json({records:await getTop(sql,trackId,period),period,trackId});
     }
     if (req.method==='POST') {
-      const playerId=verifyAuthToken(getSessionToken(req));
+      const playerId=await verifyAuthToken(sql,getSessionToken(req));
       if (!playerId || !UUID_RE.test(playerId)) return res.status(401).json({error:'Faça login novamente para salvar seu recorde.'});
       const trackId=String(req.body?.trackId||'neon-city');
       const timeMs=Number(req.body?.timeMs), clientRecordId=String(req.body?.clientRecordId||'');

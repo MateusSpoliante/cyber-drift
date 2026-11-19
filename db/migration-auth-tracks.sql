@@ -15,3 +15,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS records_one_best_per_player_track_uidx
   ON records (player_id, track_id);
 CREATE INDEX IF NOT EXISTS records_track_time_idx
   ON records (track_id, time_ms ASC, created_at ASC);
+
+
+-- Sessões de login gerenciadas pelo banco: não exige AUTH_SECRET na Vercel.
+CREATE TABLE IF NOT EXISTS player_sessions (
+  id BIGSERIAL PRIMARY KEY,
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS player_sessions_player_id_idx ON player_sessions(player_id);
+CREATE INDEX IF NOT EXISTS player_sessions_expires_at_idx ON player_sessions(expires_at);

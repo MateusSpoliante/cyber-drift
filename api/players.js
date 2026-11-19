@@ -24,7 +24,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ players: players.map(p => ({ ...p, level: Math.floor(Number(p.xp || 0) / 500) + 1 })) });
     }
     if (req.method === 'PATCH') {
-      const id = verifyAuthToken(getSessionToken(req)) || '';
+      const id = await verifyAuthToken(sql, getSessionToken(req)) || '';
 
       const bodyColor = String(req.body?.bodyColor || '#141820');
       const accentColor = String(req.body?.accentColor || '#FF6500');

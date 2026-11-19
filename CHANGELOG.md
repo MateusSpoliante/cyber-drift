@@ -58,7 +58,7 @@ Esses itens exigem infraestrutura, assets e trabalho adicional; não devem ser c
 ## Cyber Drift 3D — atualização de produto
 
 - Adicionado cadastro/login com senha derivada por `scrypt`, salt aleatório e token HMAC expirável.
-- Adicionado `AUTH_SECRET` e documentação de configuração.
+- Adicionado `(não é necessário configurar segredo de autenticação)` e documentação de configuração.
 - Adicionados quatro circuitos com dificuldade, escala e cenários distintos.
 - Rankings, recordes e fantasmas agora consultam `track_id`.
 - Adicionado retorno direto da garagem de outro jogador para a garagem pessoal.

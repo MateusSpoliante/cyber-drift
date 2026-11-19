@@ -1,5 +1,5 @@
 import { getDb } from './_db.js';
-import { randomBytes, scryptSync, timingSafeEqual, createHmac } from 'node:crypto';
+import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
 
 const TOKEN_TTL = 30 * 24 * 60 * 60;
 function hashPassword(password, salt = randomBytes(16).toString('hex')) {
@@ -12,11 +12,7 @@ function verifyPassword(password, stored) {
   const expected = Buffer.from(hash, 'hex');
   return expected.length === actual.length && timingSafeEqual(actual, expected);
 }
-function sign(playerId) {
-  const payload = Buffer.from(JSON.stringify({ sub: playerId, exp: Math.floor(Date.now()/1000) + TOKEN_TTL })).toString('base64url');
-  const signature = createHmac('sha256', process.env.AUTH_SECRET).update(payload).digest('base64url');
-  return `${payload}.${signature}`;
-}
+function hashSession(token) { return createHash('sha256').update(token).digest('hex'); }
 export function getSessionToken(req) {
   const cookieHeader = String(req.headers.cookie || '');
   const entry = cookieHeader.split(';').map(part => part.trim()).find(part => part.startsWith('cyber_drift_session='));
@@ -30,27 +26,26 @@ function clearSessionCookie(res) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   res.setHeader('Set-Cookie', `cyber_drift_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure}`);
 }
-export function verifyAuthToken(token) {
-  try {
-    const [payload, signature] = String(token || '').split('.');
-    if (!payload || !signature) return null;
-    const expected = createHmac('sha256', process.env.AUTH_SECRET).update(payload).digest();
-    const actual = Buffer.from(signature, 'base64url');
-    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
-    const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
-    if (!data.sub || data.exp < Date.now()/1000) return null;
-    return data.sub;
-  } catch { return null; }
+export async function verifyAuthToken(sql, token) {
+  if (!token) return null;
+  const tokenHash = hashSession(token);
+  const rows = await sql`SELECT player_id AS id FROM player_sessions WHERE token_hash=${tokenHash} AND expires_at > NOW() LIMIT 1`;
+  return rows[0]?.id || null;
+}
+async function createSession(sql, playerId, res) {
+  const token = randomBytes(32).toString('base64url');
+  const tokenHash = hashSession(token);
+  await sql`INSERT INTO player_sessions (player_id, token_hash, expires_at) VALUES (${playerId}::uuid, ${tokenHash}, NOW() + INTERVAL '30 days')`;
+  setSessionCookie(res, token);
 }
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  if (req.method === 'DELETE') { clearSessionCookie(res); return res.status(200).json({loggedOut:true}); }
-  if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 32) return res.status(503).json({error:'Configure AUTH_SECRET com pelo menos 32 caracteres.'});
-  if (!process.env.DATABASE_URL) return res.status(503).json({error:'Banco não configurado.'});
+  if (!process.env.DATABASE_URL) { if (req.method === 'DELETE') { clearSessionCookie(res); return res.status(200).json({loggedOut:true}); } return res.status(503).json({error:'Banco não configurado.'}); }
   const sql = getDb();
+  if (req.method === 'DELETE') { const token=getSessionToken(req); if (token) await sql`DELETE FROM player_sessions WHERE token_hash=${hashSession(token)}`; clearSessionCookie(res); return res.status(200).json({loggedOut:true}); }
   if (req.method === 'GET') {
-    const playerId = verifyAuthToken(getSessionToken(req));
+    const playerId = await verifyAuthToken(sql, getSessionToken(req));
     if (!playerId) { clearSessionCookie(res); return res.status(401).json({error:'Sessão expirada.'}); }
     const rows = await sql`SELECT id, display_name AS "displayName", username, xp, races, best_time AS "bestTime", body_color AS "bodyColor", accent_color AS "accentColor" FROM players WHERE id=${playerId}::uuid LIMIT 1`;
     if (!rows.length) { clearSessionCookie(res); return res.status(401).json({error:'Conta não encontrada.'}); }
@@ -75,7 +70,7 @@ export default async function handler(req, res) {
       if (!rows.length || !verifyPassword(password, rows[0].passwordHash)) return res.status(401).json({error:'Usuário ou senha incorretos.'});
     }
     const player = rows[0]; delete player.passwordHash;
-    setSessionCookie(res, sign(player.id));
+    await createSession(sql, player.id, res);
     return res.status(action === 'register' ? 201 : 200).json({player});
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({error:'Este nome de usuário já está em uso.'});
