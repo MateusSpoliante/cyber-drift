@@ -119,8 +119,9 @@ export function buildTrackGeometry({
             );
 
             for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
-                const a = (i * 2) + (sideIndex * (sampleCount + 1) * 2);
-                const next = a + 2;
+                // Vertices are interleaved per sample: [side A bottom/top, side B bottom/top].
+                const a = i * 4 + sideIndex * 2;
+                const next = (i + 1) * 4 + sideIndex * 2;
                 barrierIndices.push(a, a + 1, next, a + 1, next + 1, next);
                 railIndices.push(a, next, a + 1, a + 1, next, next + 1);
             }
