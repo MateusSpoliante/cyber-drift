@@ -2,7 +2,7 @@ import { getDb } from './_db.js';
 import { verifyAuthToken, getSessionToken } from './auth.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const TRACKS = new Set(['neon-city','desert-run','alpine-pass','harbor-night']);
+const TRACKS = new Set(['neon-city','desert-run','alpine-pass','harbor-night','suzuka-apex','silverstone-gp','monaco-night']);
 function cleanName(v) { return String(v || '').trim().replace(/[^A-Za-z0-9_ -]/g,'').slice(0,16); }
 function cleanGhost(value) {
   if (!Array.isArray(value)) return [];
