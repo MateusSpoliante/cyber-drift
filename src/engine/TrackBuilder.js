@@ -17,6 +17,7 @@ export class TrackBuilder {
         this.scene.add(this.group);
         this.physicsBodies = [];
         this.physicsColliders = [];
+        this.trackCollider = null;
     }
 
     build(controlPoints) {
@@ -79,6 +80,7 @@ export class TrackBuilder {
             ).setFriction(1.25).setRestitution(0)
         );
         this.physicsColliders.push(collider);
+        this.trackCollider = collider;
 
         this.addKerbs(frames);
         this.addGuardRails(frames);
@@ -189,6 +191,10 @@ export class TrackBuilder {
     }
 
     dispose() {
+        if (this.trackCollider) {
+            this.physics.world.removeCollider(this.trackCollider, true);
+            this.trackCollider = null;
+        }
         for (const body of this.physicsBodies) {
             this.physics.world.removeRigidBody(body);
         }
