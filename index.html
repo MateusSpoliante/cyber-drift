@@ -1708,37 +1708,44 @@
 
         function buildTrackRibbonMeshes(trackConfig) {
             const N = TRACK_SAMPLES_COUNT;
-            const roadPositions = [], roadUVs = [], roadIndices = [];
-            const gravelPositions = [], gravelUVs = [], gravelIndices = [];
             const totalLength = trackCurve.getLength();
             const GRAVEL_WIDTH = 13.5;
+            const roadPositions = [], roadUVs = [], roadIndices = [];
+            const gravelPositions = [], gravelUVs = [], gravelIndices = [];
+            const curbPositions = [], curbColors = [], curbIndices = [];
+            const curbColorsHex = [new THREE.Color(trackConfig.curbA), new THREE.Color(trackConfig.curbB)];
 
             for (let i = 0; i <= N; i++) {
                 const sample = trackSamples[i % N];
                 const halfWidth = ROAD_HALF_WIDTH * sample.miterScale;
                 const outerWidth = (ROAD_HALF_WIDTH + GRAVEL_WIDTH) * sample.miterScale;
-                const leftPt = sample.pt.clone().addScaledVector(sample.right, -halfWidth);
-                const rightPt = sample.pt.clone().addScaledVector(sample.right, halfWidth);
+                const curbOuter = (ROAD_HALF_WIDTH + 1.65) * sample.miterScale;
+                const left = sample.pt.clone().addScaledVector(sample.right, -halfWidth);
+                const right = sample.pt.clone().addScaledVector(sample.right, halfWidth);
                 const gravelLeft = sample.pt.clone().addScaledVector(sample.right, -outerWidth);
                 const gravelRight = sample.pt.clone().addScaledVector(sample.right, outerWidth);
+                const curbLeft = sample.pt.clone().addScaledVector(sample.right, -curbOuter);
+                const curbRight = sample.pt.clone().addScaledVector(sample.right, curbOuter);
                 const v = (i / N) * (totalLength / 26);
 
-                roadPositions.push(leftPt.x,0.055,leftPt.z,rightPt.x,0.055,rightPt.z);
+                roadPositions.push(left.x,0.058,left.z,right.x,0.058,right.z);
                 roadUVs.push(0,v,1,v);
-                gravelPositions.push(
-                    gravelLeft.x,0.028,gravelLeft.z,
-                    leftPt.x,0.028,leftPt.z,
-                    rightPt.x,0.028,rightPt.z,
-                    gravelRight.x,0.028,gravelRight.z
-                );
+                gravelPositions.push(gravelLeft.x,0.025,gravelLeft.z,left.x,0.025,left.z,right.x,0.025,right.z,gravelRight.x,0.025,gravelRight.z);
                 gravelUVs.push(0,v,1,v,0,v,1,v);
+                curbPositions.push(
+                    left.x,0.075,left.z, curbLeft.x,0.075,curbLeft.z,
+                    right.x,0.075,right.z, curbRight.x,0.075,curbRight.z
+                );
+                const color = curbColorsHex[Math.floor(i / 4) % 2];
+                for (let k=0;k<4;k++) curbColors.push(color.r,color.g,color.b);
 
-                if (i < N) {
+                if(i<N){
                     const a=i*2,b=(i+1)*2;
                     roadIndices.push(a,a+1,b,a+1,b+1,b);
                     const g=i*4,gn=(i+1)*4;
-                    gravelIndices.push(g,g+1,gn,g+1,gn+1,gn);
-                    gravelIndices.push(g+2,g+3,gn+2,g+3,gn+3,gn+2);
+                    gravelIndices.push(g,g+1,gn,g+1,gn+1,gn,g+2,g+3,gn+2,g+3,gn+3,gn+2);
+                    const c=i*4,cn=(i+1)*4;
+                    curbIndices.push(c,c+1,cn,c+1,cn+1,cn,c+2,cn+2,c+3,c+3,cn+2,cn+3);
                 }
             }
 
@@ -1747,7 +1754,7 @@
             gravelGeo.setAttribute('uv',new THREE.Float32BufferAttribute(gravelUVs,2));
             gravelGeo.setIndex(gravelIndices);
             gravelGeo.computeVertexNormals();
-            const gravelMesh=new THREE.Mesh(gravelGeo,new THREE.MeshStandardMaterial({color:0x9a8060,roughness:1,metalness:0}));
+            const gravelMesh=new THREE.Mesh(gravelGeo,new THREE.MeshStandardMaterial({color:0x9a8060,roughness:1,metalness:0,side:THREE.DoubleSide}));
             gravelMesh.receiveShadow=true;
             trackWorld.add(gravelMesh);
 
@@ -1756,32 +1763,45 @@
             roadGeo.setAttribute('uv',new THREE.Float32BufferAttribute(roadUVs,2));
             roadGeo.setIndex(roadIndices);
             roadGeo.computeVertexNormals();
-            const roadMesh=new THREE.Mesh(roadGeo,new THREE.MeshStandardMaterial({map:createAsphaltTexture(trackConfig.theme),roughness:0.76,metalness:0.16}));
+            const roadMesh=new THREE.Mesh(roadGeo,new THREE.MeshStandardMaterial({map:createAsphaltTexture(trackConfig.theme),roughness:0.76,metalness:0.12,side:THREE.DoubleSide}));
             roadMesh.receiveShadow=true;
             trackWorld.add(roadMesh);
 
-            const curbMatA=new THREE.MeshStandardMaterial({color:trackConfig.curbA,roughness:0.48});
-            const curbMatB=new THREE.MeshStandardMaterial({color:trackConfig.curbB,roughness:0.48});
-            const wallMat=new THREE.MeshStandardMaterial({color:0x1e293b,roughness:0.55,metalness:0.45});
-            const neonRailMat=new THREE.MeshBasicMaterial({color:trackConfig.railColor});
-            const curbGeo=new THREE.BoxGeometry(1.45,0.24,3.6);
-            const wallGeo=new THREE.BoxGeometry(1.0,1.4,3.8);
-            const railGeo=new THREE.BoxGeometry(1.08,0.16,3.8);
+            // Continuous kerbs follow the sampled centerline; no overlapping box segments.
+            const curbGeo=new THREE.BufferGeometry();
+            curbGeo.setAttribute('position',new THREE.Float32BufferAttribute(curbPositions,3));
+            curbGeo.setAttribute('color',new THREE.Float32BufferAttribute(curbColors,3));
+            curbGeo.setIndex(curbIndices);
+            curbGeo.computeVertexNormals();
+            const curbMesh=new THREE.Mesh(curbGeo,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.62,side:THREE.DoubleSide}));
+            curbMesh.receiveShadow=true;
+            trackWorld.add(curbMesh);
+
+            // Barriers are separate from the road and sized to each actual sample interval.
+            const wallMat=new THREE.MeshStandardMaterial({color:0x1e293b,roughness:0.62,metalness:0.25});
+            const railMat=new THREE.MeshBasicMaterial({color:trackConfig.railColor});
+            const wallMeshes=[];
+            const railMeshes=[];
             for(let i=0;i<N;i++){
-                const sample=trackSamples[i], following=trackSamples[(i+1)%N];
-                const mid=sample.pt.clone().add(following.pt).multiplyScalar(0.5);
-                const angle=Math.atan2(sample.tangent.x,sample.tangent.z);
-                const colorA=Math.floor(i/3)%2===0;
-                const curbOffset=ROAD_HALF_WIDTH*sample.miterScale+0.5;
-                const wallOffset=WALL_OFFSET*sample.miterScale;
+                const a=trackSamples[i], b=trackSamples[(i+1)%N];
+                const mid=a.pt.clone().add(b.pt).multiplyScalar(0.5);
+                const dx=b.pt.x-a.pt.x, dz=b.pt.z-a.pt.z;
+                const segmentLength=Math.sqrt(dx*dx+dz*dz);
+                const angle=Math.atan2(dx,dz);
+                const offset=WALL_OFFSET+0.7;
                 [-1,1].forEach(side=>{
-                    const cp=mid.clone().addScaledVector(sample.right,side*curbOffset);
-                    const curb=new THREE.Mesh(curbGeo,colorA?curbMatA:curbMatB);
-                    curb.position.set(cp.x,0.12,cp.z);curb.rotation.y=angle;curb.receiveShadow=true;trackWorld.add(curb);
-                    const wp=mid.clone().addScaledVector(sample.right,side*wallOffset);
-                    const wall=new THREE.Mesh(wallGeo,wallMat);
-                    wall.position.set(wp.x,0.7,wp.z);wall.rotation.y=angle;wall.castShadow=true;wall.receiveShadow=true;trackWorld.add(wall);
-                    if(i%2===0){const rail=new THREE.Mesh(railGeo,neonRailMat);rail.position.set(wp.x,1.42,wp.z);rail.rotation.y=angle;trackWorld.add(rail);}
+                    const p=mid.clone().addScaledVector(a.right,side*offset);
+                    const wall=new THREE.Mesh(new THREE.BoxGeometry(0.72,1.15,segmentLength+0.18),wallMat);
+                    wall.position.set(p.x,0.58,p.z);
+                    wall.rotation.y=angle;
+                    wall.castShadow=true; wall.receiveShadow=true;
+                    trackWorld.add(wall);
+                    if(i%2===0){
+                        const rail=new THREE.Mesh(new THREE.BoxGeometry(0.78,0.12,segmentLength+0.18),railMat);
+                        rail.position.set(p.x,1.22,p.z);
+                        rail.rotation.y=angle;
+                        trackWorld.add(rail);
+                    }
                 });
             }
         }
@@ -2447,12 +2467,10 @@
             const gravelWidth = 13.5 * localMiterScale;
             const outsideAsphalt = Math.max(0, Math.abs(lateralOffset) - asphaltEdge);
             if (outsideAsphalt > 0) {
-                // Gravel has high rolling resistance and poor tire grip.
-                // Speed falls quickly but continuously, never by an instant snap.
+                // Gravel only adds a mild, gradual speed penalty. Steering and throttle remain active.
                 const gravelDepth = Math.min(1, outsideAsphalt / gravelWidth);
-                const gravelDeceleration = (1.9 + Math.abs(player.speed) * 1.05) * (0.7 + gravelDepth * 0.3);
+                const gravelDeceleration = (0.16 + Math.abs(player.speed) * 0.10) * (0.55 + gravelDepth * 0.25);
                 player.speed = Math.sign(player.speed) * Math.max(0, Math.abs(player.speed) - gravelDeceleration * dt);
-                if (player.isDrifting) player.isDrifting = false;
             }
 
             const maxLateral = WALL_OFFSET * localMiterScale - 1.55;
