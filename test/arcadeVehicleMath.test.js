@@ -83,3 +83,11 @@ test('steering over multiple fixed steps changes heading smoothly', () => {
     assert.ok(yaw < 0 && yaw > -1);
     assert.ok(Number.isFinite(current.x) && Number.isFinite(current.z));
 });
+
+test('chassis, visual body and tyre bottoms align with the road surface', async () => {
+    const { getVehicleVerticalAlignment } = await import('../src/engine/arcadeVehicleMath.js');
+    const alignment = getVehicleVerticalAlignment();
+    assert.ok(alignment.chassisClearance >= 0 && alignment.chassisClearance < 0.01);
+    assert.ok(Math.abs(alignment.visualRootError) < 1e-9);
+    assert.ok(Math.abs(alignment.wheelBottomError) < 1e-9);
+});
