@@ -405,17 +405,17 @@
         }
         function loadPendingRecords() { try { const a=JSON.parse(localStorage.getItem(PENDING_KEY)||'[]'); return Array.isArray(a)?a:[]; } catch { return []; } }
         function savePendingRecords(items) { try { localStorage.setItem(PENDING_KEY,JSON.stringify(items.slice(-50))); } catch {} }
+        let syncingPending=false;
         async function syncPendingRecords() {
-            const pending=loadPendingRecords(); if(!apiAvailable || !pending.length) return;
+            if(syncingPending) return; const pending=loadPendingRecords(); if(!pending.length) return; syncingPending=true;
             const remaining=[];
             for(const item of pending) {
                 try {
-                    const response=await fetch(RECORDS_API,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(item)});
-                    if(!response.ok) throw new Error('sync failed');
-                    const data=await response.json();
+                    const data=await postRecordToDb(item); apiAvailable=true;
                     if(data.player) { localProfile={...localProfile,...data.player,name:data.player.displayName}; persistLocalProfile(); }
-                } catch { remaining.push(item); }
+                } catch (e) { if(!e.fatal) remaining.push(item); }
             }
+            syncingPending=false;
             savePendingRecords(remaining);
             if (pending.length && !remaining.length) {
                 try { const latest=await fetch(`${RECORDS_API}?period=${encodeURIComponent(rankingPeriod)}`); const payload=await latest.json(); if(latest.ok && Array.isArray(payload.records)) cacheRecords(payload.records); } catch {}
@@ -423,6 +423,8 @@
             renderLeaderboards();
             if(pending.length && !remaining.length) showToast('RECORDES OFFLINE SINCRONIZADOS');
         }
+        window.addEventListener('online', () => { syncPendingRecords(); refreshRecordsFromApi(); });
+        setInterval(() => { if (loadPendingRecords().length) syncPendingRecords(); }, 30000);
         function cacheRecords(records) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(records.slice(0,10))); } catch {} }
         async function refreshRecordsFromApi() {
             try {
@@ -434,32 +436,43 @@
                 await syncPendingRecords();
             } catch { apiAvailable = false; renderLeaderboards(); }
         }
+        let lastSaveSynced = false;
+        async function postRecordToDb(record) {
+            let lastError = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 12000);
+                    const response = await fetch(RECORDS_API,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(record),signal:ctrl.signal});
+                    clearTimeout(timer);
+                    const data = await response.json().catch(()=>({}));
+                    if (response.ok) return data;
+                    // 4xx = rejeitado pelo servidor (validação): não adianta repetir.
+                    if (response.status >= 400 && response.status < 500) { const e = new Error(data.error || 'Recorde rejeitado pelo servidor.'); e.fatal = true; throw e; }
+                    lastError = new Error(data.error || 'Falha ao salvar no banco.');
+                } catch (e) { if (e.fatal) throw e; lastError = e; }
+                await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
+            }
+            throw lastError || new Error('Falha ao salvar no banco.');
+        }
         async function saveNewRecord(pilotName, timeMs, ghostData) {
             const cleanName = (pilotName || '').trim().toUpperCase().replace(/[^A-Z0-9_ -]/g,'').slice(0,15);
             if (!cleanName) throw new Error('Digite um apelido válido.');
             const record = {name:cleanName,timeMs:Math.round(timeMs),deviceId:getDeviceId(),clientRecordId:makeId(),bodyColor:localProfile.bodyColor||selectedBodyColor,accentColor:localProfile.accentColor||selectedAccentColor,ghost:ghostData || []};
-            if (apiAvailable) {
-                try {
-                    const response = await fetch(RECORDS_API,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(record)});
-                    const data = await response.json().catch(()=>({}));
-                    if (!response.ok) throw new Error(data.error || 'Falha ao salvar no servidor.');
-                    localProfile = {...localProfile,...data.player,name:cleanName}; persistLocalProfile();
-                    if (ghostData?.length > 1) setGhostData(ghostData, cleanName);
-                    cacheRecords(data.records || []); renderLeaderboards(); return data.rank || null;
-                } catch (error) {
-                    // Keep the run: enqueue with the same idempotency key for a later retry.
-                    apiAvailable = false;
-                }
+            // O banco (Supabase) é a fonte principal: o recorde sempre é enviado direto para ele.
+            try {
+                const data = await postRecordToDb(record);
+                apiAvailable = true; lastSaveSynced = true;
+                localProfile = {...localProfile,...data.player,name:cleanName}; persistLocalProfile();
+                if (ghostData?.length > 1) setGhostData(ghostData, cleanName);
+                cacheRecords(data.records || []); renderLeaderboards(); return data.rank || null;
+            } catch (error) {
+                if (error.fatal) throw error; // validação do servidor: o jogador corrige e tenta de novo
+                // Sem conexão/servidor fora do ar: guarda na fila (mesmo clientRecordId) e reenvia sozinho ao banco.
+                apiAvailable = false; lastSaveSynced = false;
+                const pending=loadPendingRecords(); pending.push(record); savePendingRecords(pending);
+                if (ghostData?.length > 1) setGhostData(ghostData, cleanName);
+                return null;
             }
-            const records=loadRecords(); records.push({name:cleanName,timeMs:record.timeMs,date:new Date().toISOString().slice(0,10),playerId:localProfile.id || 'local'});
-            records.sort((a,b)=>a.timeMs-b.timeMs); cacheRecords(records);
-            const pending=loadPendingRecords(); pending.push(record); savePendingRecords(pending);
-            localProfile.name=cleanName; localProfile.xp=(localProfile.xp||0)+100; localProfile.races=(localProfile.races||0)+1;
-            localProfile.bestTime=Math.min(localProfile.bestTime||Infinity,record.timeMs); persistLocalProfile();
-            if (ghostData?.length > 1) setGhostData(ghostData, cleanName);
-            renderLeaderboards();
-            const localRank=records.findIndex(r=>r.name===cleanName && r.timeMs===record.timeMs)+1;
-            return localRank > 0 && localRank <= 10 ? localRank : null;
         }
         function getEstimatedRank(timeMs) { return loadRecords().filter(r=>timeMs>=r.timeMs).length+1; }
         function renderLeaderboards() {
@@ -2079,11 +2092,13 @@
                 try {
                     const rank = await saveNewRecord(nameVal, player.pendingRecordTimeMs, player.lastCompletedGhost || []);
                     recordSavedForPending = true;
-                    const where = apiAvailable ? 'NO RANKING ONLINE' : 'NESTE DISPOSITIVO';
-                    saveStatus.textContent = `✓ RECORDE SALVO ${where}${rank ? ` — POSIÇÃO #${rank}` : ''}. ESCOLHA MENU PRINCIPAL OU CONTINUAR CORRENDO.`;
+                    saveStatus.textContent = lastSaveSynced
+                        ? `✓ RECORDE SALVO NO BANCO DE DADOS${rank ? ` — POSIÇÃO #${rank}` : ''}. ESCOLHA MENU PRINCIPAL OU CONTINUAR CORRENDO.`
+                        : '⚠ SEM CONEXÃO COM O BANCO: RECORDE GUARDADO E SERÁ ENVIADO AUTOMATICAMENTE ASSIM QUE A CONEXÃO VOLTAR. NÃO LIMPE OS DADOS DO NAVEGADOR.';
+                    saveStatus.classList.toggle('text-red-300', !lastSaveSynced); saveStatus.classList.toggle('text-emerald-300', lastSaveSynced);
                     saveStatus.classList.remove('hidden');
                     saveButton.textContent = 'RECORDE SALVO';
-                    showToast('RECORDE SALVO!');
+                    showToast(lastSaveSynced ? 'RECORDE SALVO NO BANCO!' : 'RECORDE PENDENTE DE ENVIO');
                     // O modal permanece aberto. Só os botões de navegação o fecham.
                 } catch (error) {
                     saveStatus.textContent = error.message || 'NÃO FOI POSSÍVEL SALVAR O RECORDE. TENTE NOVAMENTE.';

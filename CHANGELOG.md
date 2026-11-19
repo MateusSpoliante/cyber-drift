@@ -39,3 +39,11 @@ Esses itens exigem infraestrutura, assets e trabalho adicional; não devem ser c
 ## Ranking por jogador
 - O ranking mantém apenas o melhor tempo de cada jogador/dispositivo, atualizando a mesma linha em vez de criar entradas repetidas.
 - A migração SQL remove duplicatas antigas por jogador e preserva o menor tempo.
+
+## Supabase como banco principal — 2026-11-19
+
+- Ao salvar um recorde, o jogo **sempre envia direto ao Supabase** (`POST /api/records`), sem depender de um estado "online" pré-detectado; até 3 tentativas com timeout.
+- O `localStorage` deixou de ser um "banco local": serve apenas de cache de leitura do ranking e de fila de segurança.
+- Se o banco estiver inacessível, o recorde entra numa fila (mesmo `clientRecordId`, sem duplicar) e é reenviado automaticamente ao voltar a conexão (evento `online`, a cada 30 s e ao abrir o jogo). A tela avisa claramente que o recorde está **pendente**, em vez de dizer que foi salvo.
+- Erros de validação do servidor (4xx) são mostrados ao jogador e não entram na fila.
+- O ranking local não é mais alterado de forma otimista: só mostra o que está no banco.
