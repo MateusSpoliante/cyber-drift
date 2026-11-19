@@ -1,29 +1,22 @@
 import * as THREE from 'three';
-
-const WHEEL_LAYOUT = [
-    { x: -1.35, y: -0.22, z:  1.48, front: true },
-    { x:  1.35, y: -0.22, z:  1.48, front: true },
-    { x: -1.38, y: -0.22, z: -1.72, front: false },
-    { x:  1.38, y: -0.22, z: -1.72, front: false }
-];
+import { stepArcadeVehicle } from './arcadeVehicleMath.js';
 
 const DEFAULT_TUNING = {
     mass: 1050,
     engineForce: 10500,
     brakeForce: 1700,
     maxSteerAngle: 0.42,
-    suspensionRestLength: 0.42,
     wheelRadius: 0.49,
-    suspensionStiffness: 28,
-    suspensionCompression: 4.4,
-    suspensionRelaxation: 5.2,
-    maxSuspensionForce: 16000,
-    frictionSlip: 2.25,
-    sideFriction: 1.15,
-    driftSideFriction: 0.72,
     maxSpeed: 112
 };
 
+/**
+ * Arcade vehicle controller backed by a Rapier dynamic rigid body.
+ *
+ * Rapier still resolves the chassis against the road and guardrails. Horizontal
+ * driving is deterministic and does not depend on wheel raycasts, which were
+ * the source of the intermittent no-traction state.
+ */
 export class VehicleController {
     constructor({ physics, spawn = { x: 0, y: 1.2, z: 0 }, tuning = {}, visual = null }) {
         if (!physics?.world || !physics?.RAPIER) {
@@ -34,11 +27,18 @@ export class VehicleController {
         this.RAPIER = physics.RAPIER;
         this.tuning = { ...DEFAULT_TUNING, ...tuning };
         this.visual = visual;
-        this.visualOffset = new THREE.Vector3(0, -0.56, 0);
+        // The chassis bottom is 0.50 m below its origin. The visual model is
+        // aligned to the same road height, both on asphalt and on the ground.
+        this.visualOffset = new THREE.Vector3(0, -0.502, 0);
         this.input = { throttle: 0, reverse: 0, brake: 0, steer: 0, handbrake: 0 };
+        this.yaw = spawn.heading ?? 0;
+        this.steerAngle = 0;
+        this.wheelSpin = 0;
 
-        const { x, y, z, heading = 0 } = spawn;
-        const spawnRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), heading);
+        const { x, y, z } = spawn;
+        const spawnRotation = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(0, 1, 0), this.yaw
+        );
         const bodyDesc = this.RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(x, y, z)
             .setRotation({
@@ -47,44 +47,23 @@ export class VehicleController {
                 z: spawnRotation.z,
                 w: spawnRotation.w
             })
-            .setLinearDamping(0.08)
-            .setAngularDamping(1.8)
+            .setLinearDamping(0.025)
+            .setAngularDamping(0)
             .setCanSleep(false)
             .setCcdEnabled(true);
 
         this.body = physics.world.createRigidBody(bodyDesc);
-        const chassisCollider = this.RAPIER.ColliderDesc.cuboid(0.92, 0.28, 2.05)
+        const chassisCollider = this.RAPIER.ColliderDesc.cuboid(0.92, 0.38, 2.05)
             .setTranslation(0, -0.12, 0)
             .setMass(this.tuning.mass)
-            .setFriction(0.7)
+            .setFriction(1.1)
             .setRestitution(0.02);
         physics.world.createCollider(chassisCollider, this.body);
 
-        this.vehicle = physics.world.createVehicleController(this.body);
-        this.vehicle.indexUpAxis = 1;
-        this.vehicle.setIndexForwardAxis = 2;
-
-        WHEEL_LAYOUT.forEach((wheel, index) => {
-            this.vehicle.addWheel(
-                { x: wheel.x, y: wheel.y, z: wheel.z },
-                { x: 0, y: -1, z: 0 },
-                { x: -1, y: 0, z: 0 },
-                this.tuning.suspensionRestLength,
-                this.tuning.wheelRadius
-            );
-            this.vehicle.setWheelSuspensionStiffness(index, this.tuning.suspensionStiffness);
-            this.vehicle.setWheelSuspensionCompression(index, this.tuning.suspensionCompression);
-            this.vehicle.setWheelSuspensionRelaxation(index, this.tuning.suspensionRelaxation);
-            this.vehicle.setWheelMaxSuspensionForce(index, this.tuning.maxSuspensionForce);
-            this.vehicle.setWheelMaxSuspensionTravel(index, 0.22);
-            this.vehicle.setWheelFrictionSlip(index, this.tuning.frictionSlip);
-            this.vehicle.setWheelSideFrictionStiffness(index, this.tuning.sideFriction);
-        });
-
         this.previousPosition = new THREE.Vector3(x, y, z);
         this.currentPosition = new THREE.Vector3(x, y, z);
-        this.previousRotation = new THREE.Quaternion();
-        this.currentRotation = new THREE.Quaternion();
+        this.previousRotation = spawnRotation.clone();
+        this.currentRotation = spawnRotation.clone();
         this.velocity = new THREE.Vector3();
         this.forwardScratch = new THREE.Vector3(0, 0, 1);
         this.rotationScratch = new THREE.Quaternion();
@@ -94,7 +73,7 @@ export class VehicleController {
         this.isDrifting = false;
     }
 
-    setInput(input) {
+    setInput(input = {}) {
         this.input.throttle = THREE.MathUtils.clamp(input.throttle ?? 0, 0, 1);
         this.input.reverse = THREE.MathUtils.clamp(input.reverse ?? 0, 0, 1);
         this.input.brake = THREE.MathUtils.clamp(input.brake ?? 0, 0, 1);
@@ -106,41 +85,39 @@ export class VehicleController {
         this.previousPosition.copy(this.currentPosition);
         this.previousRotation.copy(this.currentRotation);
 
-        // Use the chassis velocity as the authoritative speed source. Rapier's
-        // vehicle speed can remain at zero when a wheel ray misses a mesh collider.
         const rotation = this.body.rotation();
-        const forward = this.forwardScratch
+        const currentForward = this.forwardScratch
             .set(0, 0, 1)
             .applyQuaternion(this.rotationScratch.set(rotation.x, rotation.y, rotation.z, rotation.w));
+        this.yaw = Math.atan2(currentForward.x, currentForward.z);
+
         const velocity = this.body.linvel();
-        const forwardSpeed = velocity.x * forward.x + velocity.y * forward.y + velocity.z * forward.z;
-        const speedRatio = THREE.MathUtils.clamp(Math.abs(forwardSpeed) / this.tuning.maxSpeed, 0, 1);
-        const steerAngle = this.input.steer * this.tuning.maxSteerAngle * (1 - speedRatio * 0.35);
-        const brakeForce = this.input.brake * this.tuning.brakeForce + this.input.handbrake * this.tuning.brakeForce * 1.8;
-        const rearGrip = this.input.handbrake > 0.1 ? this.tuning.driftSideFriction : this.tuning.sideFriction;
+        const motion = stepArcadeVehicle({
+            yaw: this.yaw,
+            velocity: { x: velocity.x, y: velocity.y, z: velocity.z },
+            input: this.input,
+            tuning: this.tuning,
+            dt
+        });
 
-        for (let i = 0; i < 4; i++) {
-            this.vehicle.setWheelSteering(i, i < 2 ? steerAngle : 0);
-            // Steering and suspension remain on Rapier's vehicle controller.
-            // Propulsion is applied to the chassis below so a missed wheel ray
-            // cannot leave the car permanently unable to accelerate.
-            this.vehicle.setWheelEngineForce(i, 0);
-            this.vehicle.setWheelBrake(i, brakeForce * (i >= 2 && this.input.handbrake > 0.1 ? 1.6 : 1));
-            this.vehicle.setWheelSideFrictionStiffness(i, i >= 2 ? rearGrip : this.tuning.sideFriction);
-        }
+        this.yaw = motion.yaw;
+        const halfYaw = this.yaw * 0.5;
+        this.body.setRotation({
+            x: 0,
+            y: Math.sin(halfYaw),
+            z: 0,
+            w: Math.cos(halfYaw)
+        }, true);
+        // Keep the car upright. Its visible wheels still steer and spin, while
+        // the rigid body handles translation, gravity and obstacle collisions.
+        this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        this.body.setLinvel(motion.velocity, true);
 
-        this.vehicle.updateVehicle(dt, this.RAPIER.QueryFilterFlags?.EXCLUDE_DYNAMIC);
-
-        const drive = this.input.throttle > 0
-            ? (forwardSpeed < this.tuning.maxSpeed ? this.input.throttle * this.tuning.engineForce : 0)
-            : (forwardSpeed > -18 ? -this.input.reverse * this.tuning.engineForce * 0.62 : 0);
-        if (drive !== 0) {
-            this.body.addForce({ x: forward.x * drive, y: 0, z: forward.z * drive }, true);
-        }
-        if (brakeForce > 0 && Math.abs(forwardSpeed) > 0.15) {
-            const braking = brakeForce * Math.sign(forwardSpeed);
-            this.body.addForce({ x: -forward.x * braking, y: 0, z: -forward.z * braking }, true);
-        }
+        const speedRatio = THREE.MathUtils.clamp(
+            Math.abs(motion.forwardSpeed) / this.tuning.maxSpeed, 0, 1
+        );
+        this.steerAngle = this.input.steer * this.tuning.maxSteerAngle * (1 - speedRatio * 0.35);
+        this.wheelSpin += motion.forwardSpeed * dt / Math.max(0.1, this.tuning.wheelRadius);
     }
 
     postStep() {
@@ -153,12 +130,17 @@ export class VehicleController {
         this.velocity.set(velocity.x, velocity.y, velocity.z);
         const forward = this.forwardScratch.set(0, 0, 1).applyQuaternion(this.currentRotation);
         this.speedKmh = this.velocity.dot(forward) * 3.6;
+
         const planarVelocity = this.planarVelocityScratch.copy(this.velocity).setY(0);
-        const velocityLength = planarVelocity.length();
-        this.slipAngle = velocityLength > 0.5
-            ? Math.atan2(forward.x * planarVelocity.z - forward.z * planarVelocity.x, forward.dot(planarVelocity))
+        const planarSpeed = planarVelocity.length();
+        this.slipAngle = planarSpeed > 0.5
+            ? Math.atan2(
+                forward.x * planarVelocity.z - forward.z * planarVelocity.x,
+                forward.dot(planarVelocity)
+            )
             : 0;
-        this.isDrifting = Math.abs(this.slipAngle) > 0.22 && velocityLength > 7;
+        this.isDrifting = Math.abs(this.slipAngle) > 0.22 && planarSpeed > 7;
+        this.yaw = Math.atan2(forward.x, forward.z);
     }
 
     syncVisual(alpha = 1) {
@@ -167,29 +149,20 @@ export class VehicleController {
         root.position.lerpVectors(this.previousPosition, this.currentPosition, alpha).add(this.visualOffset);
         root.quaternion.copy(this.previousRotation).slerp(this.currentRotation, alpha);
 
-        if (this.visual.steerPivots) {
-            this.visual.steerPivots.forEach((pivot, index) => {
-                pivot.rotation.y = this.vehicle.wheelSteering(index) ?? 0;
-            });
-        }
-        for (let index = 0; index < 4; index++) {
-            const suspensionLength = this.vehicle.wheelSuspensionLength(index);
-            const wheelSteering = this.vehicle.wheelSteering(index) ?? 0;
-            const wheelRotation = this.vehicle.wheelRotation(index) ?? 0;
-
-            if (this.visual.wheelPivots?.[index] && Number.isFinite(suspensionLength)) {
-                this.visual.wheelPivots[index].position.y = 0.83 - suspensionLength;
-            }
-            if (this.visual.wheelPivots?.[index] && index < 2) {
-                this.visual.wheelPivots[index].rotation.y = wheelSteering;
-            }
-            if (this.visual.spinMeshes?.[index]) {
-                this.visual.spinMeshes[index].rotation.x = wheelRotation;
-            }
-        }
+        this.visual.steerPivots?.forEach(pivot => {
+            pivot.rotation.y = this.steerAngle;
+        });
+        this.visual.wheelPivots?.forEach((pivot, index) => {
+            pivot.position.y = 0.49;
+            if (index < 2) pivot.rotation.y = this.steerAngle;
+        });
+        this.visual.spinMeshes?.forEach(mesh => {
+            mesh.rotation.x = this.wheelSpin;
+        });
     }
 
     reset(position, heading = 0) {
+        this.yaw = heading;
         const rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), heading);
         this.body.setTranslation({ x: position.x, y: position.y, z: position.z }, true);
         this.body.setRotation({ x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w }, true);
@@ -203,24 +176,14 @@ export class VehicleController {
         this.speedKmh = 0;
         this.slipAngle = 0;
         this.isDrifting = false;
+        this.steerAngle = 0;
+        this.wheelSpin = 0;
         this.setInput({});
     }
 
-    getWheelState(index) {
-        if (index < 0 || index >= 4) return null;
-        const contact = this.vehicle.wheelContactPoint(index);
-        return {
-            inContact: this.vehicle.wheelIsInContact(index),
-            rotation: this.vehicle.wheelRotation(index),
-            suspensionLength: this.vehicle.wheelSuspensionLength(index),
-            contactPoint: contact ? new THREE.Vector3(contact.x, contact.y, contact.z) : null
-        };
-    }
-
     dispose() {
-        this.physics.world.removeVehicleController(this.vehicle);
         this.physics.world.removeRigidBody(this.body);
     }
 }
 
-export { DEFAULT_TUNING as DEFAULT_VEHICLE_TUNING, WHEEL_LAYOUT };
+export { DEFAULT_TUNING as DEFAULT_VEHICLE_TUNING };
