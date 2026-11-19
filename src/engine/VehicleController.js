@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 
 const WHEEL_LAYOUT = [
-    { x: -1.35, y: 0.63, z:  1.48, front: true },
-    { x:  1.35, y: 0.63, z:  1.48, front: true },
-    { x: -1.38, y: 0.63, z: -1.72, front: false },
-    { x:  1.38, y: 0.63, z: -1.72, front: false }
+    { x: -1.35, y: 0.45, z:  1.48, front: true },
+    { x:  1.35, y: 0.45, z:  1.48, front: true },
+    { x: -1.38, y: 0.45, z: -1.72, front: false },
+    { x:  1.38, y: 0.45, z: -1.72, front: false }
 ];
 
 const DEFAULT_TUNING = {
