@@ -8,7 +8,7 @@ O exemplo abaixo demonstra a ligação entre os módulos. Ele é um ponto de par
 
 ```js
 import * as THREE from 'three';
-import { createSportsCarMesh } from '../game/Car.js';
+import { createSportsCarMesh } from './game/Car.js';
 import {
     PhysicsWorld,
     VehicleController,
