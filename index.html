@@ -110,6 +110,12 @@
             transition: opacity 0.16s ease;
             background: radial-gradient(circle at center, transparent 46%, rgba(0, 240, 255, 0.22) 86%, rgba(255, 101, 0, 0.36) 100%);
         }
+        /* HUD enxuto: mantém os elementos no DOM para a lógica do jogo, mas oculta telemetria secundária. */
+        .hud-secondary-info,
+        .hud-gear-info {
+            display: none !important;
+        }
+
         .custom-scroll::-webkit-scrollbar {
             width: 6px;
         }
@@ -174,7 +180,7 @@
 
             <!-- Live Sector Splits & Drift Telemetry -->
             <div class="flex flex-wrap items-center gap-2">
-                <div class="cyber-panel px-3.5 py-2 rounded-xl flex items-center space-x-3 text-xs font-orbitron">
+                <div class="cyber-panel px-3.5 py-2 rounded-xl flex items-center space-x-3 text-xs font-orbitron hud-secondary-info">
                     <span class="text-slate-300">S1: <b id="s1-display" class="text-cyan-300 tabular-nums">--.--</b></span>
                     <span class="text-slate-600">|</span>
                     <span class="text-slate-300">S2: <b id="s2-display" class="text-cyan-300 tabular-nums">--.--</b></span>
@@ -182,7 +188,7 @@
                     <span id="drift-bonus-tag" class="text-[#FF6500] font-bold opacity-40 transition-opacity">DRIFT +NITRO</span>
                 </div>
 
-                <div class="cyber-panel px-3.5 py-2 rounded-xl flex items-center gap-3 text-xs font-orbitron">
+                <div class="cyber-panel px-3.5 py-2 rounded-xl flex items-center gap-3 text-xs font-orbitron hud-secondary-info">
                     <span class="text-slate-300">DRIFT: <b id="drift-score-display" class="text-[#FF6500] tabular-nums">0</b></span>
                     <span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold tabular-nums" id="drift-combo-display">x1.0</span>
                 </div>
@@ -260,7 +266,7 @@
                     </div>
 
                     <!-- Gear -->
-                    <div class="flex flex-col items-center justify-center bg-slate-900 border-2 border-cyan-500/45 w-14 h-16 rounded-xl shadow-inner">
+                    <div class="flex flex-col items-center justify-center bg-slate-900 border-2 border-cyan-500/45 w-14 h-16 rounded-xl shadow-inner hud-gear-info">
                         <span class="text-[9px] text-slate-400 font-orbitron font-bold">MARCHA</span>
                         <span id="gear-display" class="text-3xl font-black font-orbitron text-[#FF6500] leading-none mt-0.5">N</span>
                     </div>
