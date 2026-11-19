@@ -1702,17 +1702,33 @@ import { VFXSystem } from './engine/VFXSystem.js';
                     new THREE.MeshStandardMaterial({color:0x9a3412, roughness:0.75}),
                     new THREE.MeshStandardMaterial({color:0x334155, roughness:0.75})
                 ];
+                const containerInstances = containerMaterials.map(() => []);
                 for (let i = 0; i < 48; i++) {
                     const rx = (Math.random() - 0.5) * 1400;
                     const rz = (Math.random() - 0.5) * 1150;
                     const containerFootprintRadius = 15;
                     if (!isPointFarFromTrack(rx, rz, WALL_OFFSET + containerFootprintRadius + 8)) continue;
-                    const container = new THREE.Mesh(containerGeo, containerMaterials[i % containerMaterials.length]);
-                    container.position.set(rx, 4 + (i % 4 === 0 ? 8 : 0), rz);
-                    container.rotation.y = Math.round(Math.random()) * Math.PI / 2;
-                    container.castShadow = true;
-                    trackWorld.add(container);
+                    containerInstances[i % containerMaterials.length].push({
+                        x: rx, y: 4 + (i % 4 === 0 ? 8 : 0), z: rz,
+                        rotation: Math.round(Math.random()) * Math.PI / 2
+                    });
                 }
+
+                const dummy = new THREE.Object3D();
+                containerInstances.forEach((instances, index) => {
+                    if (!instances.length) return;
+                    const mesh = new THREE.InstancedMesh(containerGeo, containerMaterials[index], instances.length);
+                    instances.forEach((item, instanceIndex) => {
+                        dummy.position.set(item.x, item.y, item.z);
+                        dummy.rotation.set(0, item.rotation, 0);
+                        dummy.scale.set(1, 1, 1);
+                        dummy.updateMatrix();
+                        mesh.setMatrixAt(instanceIndex, dummy.matrix);
+                    });
+                    mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+                    mesh.instanceMatrix.needsUpdate = true;
+                    trackWorld.add(mesh);
+                });
             }
 
             if (theme === 'desert' || theme === 'alpine' || theme === 'suzuka' || theme === 'airfield') {
@@ -1724,26 +1740,51 @@ import { VFXSystem } from './engine/VFXSystem.js';
                     color: theme === 'alpine' ? 0xe2e8f0 : theme === 'suzuka' ? 0xf472b6 : 0xc28554,
                     roughness: 0.9
                 });
+                const mountainGeo = new THREE.ConeGeometry(1, 1, 7);
+                const capGeo = new THREE.ConeGeometry(1, 1, 7);
+                const mountains = [];
+                const caps = [];
 
                 for (let i = 0; i < 72; i++) {
                     const rx = (Math.random() - 0.5) * 1750;
                     const rz = (Math.random() - 0.5) * 1550;
                     const radius = theme === 'airfield' ? (22 + Math.random() * 35) : (32 + Math.random() * 68);
                     const height = theme === 'airfield' ? (14 + Math.random() * 24) : (45 + Math.random() * 130);
-                    // The mountain's full base radius is included in the safety margin.
                     if (!isPointFarFromTrack(rx, rz, WALL_OFFSET + radius + 18)) continue;
-                    const mountain = new THREE.Mesh(new THREE.ConeGeometry(radius, height, 7), mountainMat);
-                    mountain.position.set(rx, height / 2 - 1, rz);
-                    mountain.rotation.y = Math.random() * Math.PI;
-                    mountain.castShadow = true;
-                    trackWorld.add(mountain);
-
+                    const rotation = Math.random() * Math.PI;
+                    mountains.push({ x: rx, y: height / 2 - 1, z: rz, radius, height, rotation });
                     if (theme === 'alpine' || theme === 'suzuka') {
-                        const cap = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.46, height * 0.34, 7), capMat);
-                        cap.position.set(rx, height * 0.82, rz);
-                        cap.rotation.y = mountain.rotation.y;
-                        trackWorld.add(cap);
+                        caps.push({ x: rx, y: height * 0.82, z: rz, radius: radius * 0.46, height: height * 0.34, rotation });
                     }
+                }
+
+                const dummy = new THREE.Object3D();
+                if (mountains.length) {
+                    const mountainMesh = new THREE.InstancedMesh(mountainGeo, mountainMat, mountains.length);
+                    mountains.forEach((item, index) => {
+                        dummy.position.set(item.x, item.y, item.z);
+                        dummy.rotation.set(0, item.rotation, 0);
+                        dummy.scale.set(item.radius, item.height, item.radius);
+                        dummy.updateMatrix();
+                        mountainMesh.setMatrixAt(index, dummy.matrix);
+                    });
+                    mountainMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+                    mountainMesh.instanceMatrix.needsUpdate = true;
+                    trackWorld.add(mountainMesh);
+                }
+
+                if (caps.length) {
+                    const capMesh = new THREE.InstancedMesh(capGeo, capMat, caps.length);
+                    caps.forEach((item, index) => {
+                        dummy.position.set(item.x, item.y, item.z);
+                        dummy.rotation.set(0, item.rotation, 0);
+                        dummy.scale.set(item.radius, item.height, item.radius);
+                        dummy.updateMatrix();
+                        capMesh.setMatrixAt(index, dummy.matrix);
+                    });
+                    capMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+                    capMesh.instanceMatrix.needsUpdate = true;
+                    trackWorld.add(capMesh);
                 }
             }
         }
