@@ -564,7 +564,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
             document.getElementById('pause-track-title').innerText = cfg.name;
 
             renderTrackCards();
-            buildWorldAndTrack();
+            buildWorldAndTrack({ deferScenery: true });
             rebuildPhysicsTrack();
             resetPlayerToStart();
             player.bestLapMs = null;
@@ -2191,7 +2191,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
             if (gameState !== 'PLAYING') return;
             gameState = 'PAUSED';
             sound.update(0, false, false);
-            document.getElementById('speed-lines').style.opacity = '0';
+            setSpeedLinesActive(false);
             clearInputKeys();
             if (timerStarted) {
                 pausedElapsedMs = performance.now() - player.lapStartTime;
@@ -2219,7 +2219,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
             document.getElementById('pause-modal').classList.add('hidden');
             document.getElementById('pause-modal').classList.remove('flex');
             document.getElementById('record-modal').classList.add('hidden');
-            document.getElementById('speed-lines').style.opacity = '0';
+            setSpeedLinesActive(false);
 
             resetPlayerToStart();
             player.lap = 1;
@@ -2637,7 +2637,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
         function startTimeTrial() {
             if (!authToken) { showToast('ENTRE NA SUA CONTA ANTES DE JOGAR'); return; }
             if (!physicsReady || !physicsVehicle) { showToast('AGUARDE A PISTA TERMINAR DE CARREGAR'); return; }
-            sound.init();
+            try { sound.init(); } catch (error) { console.warn('[Cyber Drift] Áudio indisponível; corrida continuará sem som.', error); }
             document.getElementById('menu-overlay').classList.add('hidden');
             document.getElementById('record-modal').classList.add('hidden');
             document.getElementById('pause-modal').classList.add('hidden');
