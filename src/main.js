@@ -460,7 +460,6 @@ import { createTrackCenterline } from './game/Track.js';
         let trackWorld = null;
         const PROFILE_KEY = 'cyber_drift_profile_v1';
         const DEVICE_KEY = 'cyber_drift_device_id_v1';
-        const GHOST_KEY = 'cyber_drift_best_ghost_v2';
         const PENDING_KEY = 'cyber_drift_pending_records_v1';
         const RECORDS_API = '/api/records';
         const PLAYERS_API = '/api/players';
@@ -559,7 +558,6 @@ import { createTrackCenterline } from './game/Track.js';
             player.bestLapMs = null;
             document.getElementById('best-display').innerText = '--:--.--';
             refreshRecordsFromApi();
-            refreshGhost();
             updateMinimap();
             showToast(`CIRCUITO: ${cfg.name} (${cfg.difficulty})`);
         }
@@ -687,13 +685,11 @@ import { createTrackCenterline } from './game/Track.js';
                 const data = await postRecordToDb(record);
                 apiAvailable = true; lastSaveSynced = true;
                 localProfile = {...localProfile,...data.player,name:cleanName}; persistLocalProfile();
-                if (ghostData?.length > 1) setGhostData(ghostData, cleanName);
                 cacheRecords(data.records || []); renderLeaderboards(); return data.rank || null;
             } catch (error) {
                 if (error.fatal) throw error;
                 apiAvailable = false; lastSaveSynced = false;
                 const pending=loadPendingRecords(); pending.push(record); savePendingRecords(pending);
-                if (ghostData?.length > 1) setGhostData(ghostData, cleanName);
                 return null;
             }
         }
@@ -782,34 +778,6 @@ import { createTrackCenterline } from './game/Track.js';
             }
             status.innerText='✓ PERSONALIZAÇÃO SALVA NESTE DISPOSITIVO!';
             showToast('PERSONALIZAÇÃO SALVA!');
-        }
-        function setGhostData(data, label = 'FANTASMA') {
-            if (!Array.isArray(data) || data.length < 2) return;
-            ghostData = data.slice(0,2500).filter(p=>Number.isFinite(Number(p.t)) && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.z)) && Number.isFinite(Number(p.h))).sort((a,b)=>a.t-b.t);
-            try { localStorage.setItem(`${GHOST_KEY}_${selectedTrackId}`, JSON.stringify(ghostData)); } catch {}
-        }
-        async function refreshGhost() {
-            try {
-                const response = await fetch(`/api/ghost?trackId=${encodeURIComponent(selectedTrackId)}`);
-                if (!response.ok) throw new Error('API indisponível');
-                const data = await response.json();
-                if (data.ghost?.ghost?.length > 1) setGhostData(data.ghost.ghost, data.ghost.name);
-                else ghostData = JSON.parse(localStorage.getItem(`${GHOST_KEY}_${selectedTrackId}`) || '[]');
-            } catch {
-                try { ghostData = JSON.parse(localStorage.getItem(`${GHOST_KEY}_${selectedTrackId}`) || '[]'); } catch { ghostData = []; }
-            }
-        }
-        function updateGhost(now) {
-            if (!ghostCar || ghostData.length < 2 || gameState !== 'PLAYING' || !timerStarted) { if (ghostCar) ghostCar.visible=false; return; }
-            const elapsed = now - player.lapStartTime;
-            if (elapsed > Number(ghostData[ghostData.length-1].t)) { ghostCar.visible=false; return; }
-            let i=1; while(i<ghostData.length && Number(ghostData[i].t)<elapsed) i++;
-            const a=ghostData[Math.max(0,i-1)], b=ghostData[Math.min(i,ghostData.length-1)];
-            const span=Math.max(1,Number(b.t)-Number(a.t)); const f=Math.max(0,Math.min(1,(elapsed-Number(a.t))/span));
-            const ghostY = Number(a.y ?? 0) + (Number(b.y ?? 0) - Number(a.y ?? 0)) * f;
-            ghostCar.position.set(Number(a.x)+(Number(b.x)-Number(a.x))*f,ghostY + 0.04,Number(a.z)+(Number(b.z)-Number(a.z))*f);
-            let dh=Number(b.h)-Number(a.h); while(dh>Math.PI)dh-=Math.PI*2; while(dh<-Math.PI)dh+=Math.PI*2;
-            ghostCar.rotation.y=Number(a.h)+dh*f; ghostCar.visible=true;
         }
         function escapeHtml(str) { return String(str).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
@@ -1015,14 +983,10 @@ import { createTrackCenterline } from './game/Track.js';
         let driftScore = 0;
         let driftCombo = 1;
         let driftChainSeconds = 0;
-        let lapGhostSamples = [];
-        let ghostCar = null;
         let previewCar = null;
         let previewScene = null;
         let previewCamera = null;
         let previewRenderer = null;
-        let ghostData = [];
-        let lastGhostSample = 0;
 
         function clearInputKeys() {
             keys.w = false;
@@ -1946,13 +1910,7 @@ import { createTrackCenterline } from './game/Track.js';
             document.getElementById('drift-score-display').innerText = Math.floor(driftScore).toLocaleString('pt-BR');
             document.getElementById('drift-combo-display').innerText = `x${driftCombo.toFixed(1)}`;
 
-            // Ghost sampling
-            const ghostNow = performance.now();
-            if (timerStarted && ghostNow - lastGhostSample >= 100) {
-                lapGhostSamples.push({ t: Math.max(0, ghostNow - player.lapStartTime), x: Number(player.pos.x.toFixed(2)), y: Number(player.pos.y.toFixed(2)), z: Number(player.pos.z.toFixed(2)), h: Number(player.heading.toFixed(3)) });
-                if (lapGhostSamples.length > 2500) lapGhostSamples.shift();
-                lastGhostSample = ghostNow;
-            }
+
 
             // Sector & Lap Timing Logic
             const prevT = player.trackT;
@@ -1982,10 +1940,8 @@ import { createTrackCenterline } from './game/Track.js';
         function onPlayerCompleteLap() {
             const now = performance.now();
             const lapMs = now - player.lapStartTime;
-            const completedGhost = lapGhostSamples.slice(0, 2500);
-            lapGhostSamples = [];
-            lastGhostSample = now;
-            player.lastCompletedGhost = completedGhost;
+            const completedGhost = [];
+            player.lastCompletedGhost = [];
 
             player.lapStartTime = now;
             player.sector1Done = false;
@@ -2054,7 +2010,6 @@ import { createTrackCenterline } from './game/Track.js';
             recordSavedForPending = false;
             player.lapStartTime = performance.now();
             timerStarted = true;
-            lapGhostSamples = []; lastGhostSample = player.lapStartTime;
             player.pendingRecordTimeMs = null;
             player.sector1Done = false;
             player.sector2Done = false;
@@ -2085,8 +2040,7 @@ import { createTrackCenterline } from './game/Track.js';
             modal.classList.remove('flex');
             if (timerStarted) {
                 player.lapStartTime = performance.now() - pausedElapsedMs;
-                lastGhostSample = performance.now();
-            }
+                }
             gameState = 'PLAYING';
             showToast('CORRIDA RETOMADA');
         }
@@ -2098,7 +2052,6 @@ import { createTrackCenterline } from './game/Track.js';
             document.getElementById('pause-modal').classList.remove('flex');
             document.getElementById('record-modal').classList.add('hidden');
             document.getElementById('speed-lines').style.opacity = '0';
-            if (ghostCar) ghostCar.visible = false;
 
             resetPlayerToStart();
             player.lap = 1;
@@ -2214,14 +2167,7 @@ import { createTrackCenterline } from './game/Track.js';
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(startM.x - 3.5, startM.y - 3.5, 7, 7);
 
-            // Ghost dot if active
-            if (ghostCar && ghostCar.visible) {
-                const gm = worldToMinimap(ghostCar.position.x, ghostCar.position.z);
-                ctx.fillStyle = 'rgba(0, 240, 255, 0.85)';
-                ctx.beginPath();
-                ctx.arc(gm.x, gm.y, 3.2, 0, Math.PI * 2);
-                ctx.fill();
-            }
+
 
             // Player directional arrow
             const pm = worldToMinimap(player.pos.x, player.pos.z);
@@ -2314,16 +2260,7 @@ import { createTrackCenterline } from './game/Track.js';
 
             playerCar = createSportsCarMesh();
             scene.add(playerCar.mesh);
-            ghostCar = playerCar.mesh.clone(true);
-            ghostCar.traverse(obj => {
-                if (obj.isMesh && obj.material) {
-                    obj.material = Array.isArray(obj.material) ? obj.material.map(m=>m.clone()) : obj.material.clone();
-                    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-                    mats.forEach(m => { m.transparent = true; m.opacity = 0.25; m.depthWrite = false; });
-                }
-            });
-            ghostCar.visible = false;
-            scene.add(ghostCar);
+
 
             const previewCanvas = document.getElementById('garage-preview-canvas');
             previewScene = new THREE.Scene();
@@ -2471,7 +2408,7 @@ import { createTrackCenterline } from './game/Track.js';
                     showToast('COMPLETE UMA VOLTA PRIMEIRO PARA SALVAR!');
                     return;
                 }
-                player.lastCompletedGhost = player.bestLapGhost || player.lastCompletedGhost || [];
+                player.lastCompletedGhost = [];
                 openSaveRecordModal(player.bestLapMs, false);
             });
 
@@ -2528,7 +2465,6 @@ import { createTrackCenterline } from './game/Track.js';
             document.getElementById('best-display').innerText = '--:--.--';
 
             resetPlayerToStart();
-            lapGhostSamples = []; lastGhostSample = 0;
             timerStarted = false;
             driftScore = 0; driftCombo = 1; driftChainSeconds = 0;
             gameState = 'PLAYING';
@@ -2575,7 +2511,6 @@ import { createTrackCenterline } from './game/Track.js';
             renderLeaderboards();
             await restoreSession();
             refreshRecordsFromApi();
-            refreshGhost();
             requestAnimationFrame(animate);
         }
 
