@@ -963,6 +963,17 @@ import { VFXSystem } from './engine/VFXSystem.js';
         const smokeSpawnPosition = new THREE.Vector3();
         const smokeSpawnVelocity = new THREE.Vector3(0, 1, 0);
         const sparkNormal = new THREE.Vector3(0, 1, 0);
+        const worldUp = new THREE.Vector3(0, 1, 0);
+        const rearLeftOffset = new THREE.Vector3(-0.95, 0.25, -1.6);
+        const rearRightOffset = new THREE.Vector3(0.95, 0.25, -1.6);
+        const rearLeftPosition = new THREE.Vector3();
+        const rearRightPosition = new THREE.Vector3();
+        const previousSkidLeft = new THREE.Vector3();
+        const previousSkidRight = new THREE.Vector3();
+        let hasPreviousSkid = false;
+        let smokeSpawnAccumulator = 0;
+        let skidMarkAccumulator = 0;
+        let lastNitroSparkTime = 0;
         let minimapBounds = { centerX: 0, centerZ: 0, scale: 1 };
 
         let gameState = 'MENU'; // MENU, PLAYING, PAUSED, MODAL
@@ -2056,11 +2067,45 @@ import { VFXSystem } from './engine/VFXSystem.js';
             const normalizedAngle = THREE.MathUtils.euclideanModulo(angleDiff + Math.PI, Math.PI * 2) - Math.PI;
 
 
-            if (player.isDrifting && Math.random() < 0.65) {
-                const rearLeft = new THREE.Vector3(-0.95, 0.25, -1.6).applyAxisAngle(new THREE.Vector3(0, 1, 0), player.heading).add(player.pos);
-                const rearRight = new THREE.Vector3(0.95, 0.25, -1.6).applyAxisAngle(new THREE.Vector3(0, 1, 0), player.heading).add(player.pos);
-                spawnSmokeParticle(rearLeft.x, rearLeft.y, rearLeft.z, false);
-                spawnSmokeParticle(rearRight.x, rearRight.y, rearRight.z, false);
+            if (player.isDrifting) {
+                smokeSpawnAccumulator += dt;
+                skidMarkAccumulator += dt;
+
+                rearLeftPosition.copy(rearLeftOffset).applyAxisAngle(worldUp, player.heading).add(player.pos);
+                rearRightPosition.copy(rearRightOffset).applyAxisAngle(worldUp, player.heading).add(player.pos);
+                rearLeftPosition.y = player.pos.y + 0.035;
+                rearRightPosition.y = player.pos.y + 0.035;
+
+                if (smokeSpawnAccumulator >= 0.045) {
+                    smokeSpawnAccumulator = 0;
+                    spawnSmokeParticle(rearLeftPosition.x, rearLeftPosition.y, rearLeftPosition.z, false);
+                    spawnSmokeParticle(rearRightPosition.x, rearRightPosition.y, rearRightPosition.z, false);
+                }
+
+                if (skidMarkAccumulator >= 0.045) {
+                    skidMarkAccumulator = 0;
+                    if (hasPreviousSkid && vfxSystem) {
+                        vfxSystem.addSkidSegment(previousSkidLeft, rearLeftPosition);
+                        vfxSystem.addSkidSegment(previousSkidRight, rearRightPosition);
+                    }
+                    previousSkidLeft.copy(rearLeftPosition);
+                    previousSkidRight.copy(rearRightPosition);
+                    hasPreviousSkid = true;
+                }
+            } else {
+                smokeSpawnAccumulator = 0;
+                skidMarkAccumulator = 0;
+                hasPreviousSkid = false;
+            }
+
+            if (player.isNitro && performance.now() - lastNitroSparkTime >= 90) {
+                lastNitroSparkTime = performance.now();
+                rearLeftPosition.copy(rearLeftOffset).applyAxisAngle(worldUp, player.heading).add(player.pos);
+                rearLeftPosition.y = player.pos.y + 0.12;
+                spawnSmokeParticle(rearLeftPosition.x, rearLeftPosition.y, rearLeftPosition.z, true);
+                rearRightPosition.copy(rearRightOffset).applyAxisAngle(worldUp, player.heading).add(player.pos);
+                rearRightPosition.y = player.pos.y + 0.12;
+                spawnSmokeParticle(rearRightPosition.x, rearRightPosition.y, rearRightPosition.z, true);
             }
 
             // Drift score
