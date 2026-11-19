@@ -61,7 +61,8 @@ const keys = new Set();
 function updateInput() {
     vehicle.setInput({
         throttle: keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0,
-        reverse: keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0,\n        brake: keys.has('KeyX') ? 1 : 0,
+        reverse: keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0,
+        brake: keys.has('KeyX') ? 1 : 0,
         steer: (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0)
             - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0),
         handbrake: keys.has('Space') ? 1 : 0
