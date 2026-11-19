@@ -34,6 +34,8 @@ src/
     VFXSystem.js             # fumaça instanciada e skidmarks
     RenderPipeline.js        # EffectComposer, Bloom e SMAA
     EnvironmentBuilder.js    # PMREM e environment map procedural
+    CameraRig.js             # câmera spring-arm e FOV dinâmico
+    LightingRig.js           # golden hour, sombras e iluminação
     UIManager.js             # atualização desacoplada do HUD
 index.html                   # shell da aplicação
 ```
@@ -45,7 +47,7 @@ index.html                   # shell da aplicação
 3. `VehicleController` cria o rigid body do carro e usa `DynamicRayCastVehicleController` do Rapier com quatro rodas.
 4. `Engine` executa a simulação em timestep fixo (padrão 120 Hz) e renderiza com interpolação.
 5. `RenderPipeline`, `EnvironmentBuilder`, `LightingRig` e `CameraRig` cuidam de pós-processamento, reflexos, luz e câmera.
-5. `AudioSynth`, `VFXSystem` e `UIManager` recebem telemetria e não controlam a física.
+6. `AudioSynth`, `VFXSystem` e `UIManager` recebem telemetria e não controlam a física.
 
 O controlador de veículo do Rapier é baseado em raycast; não é uma classe externa chamada `RaycastVehicle`. A suspensão, as forças de tração/frenagem e a aderência lateral são configuradas nas quatro rodas do controlador nativo.
 
