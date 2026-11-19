@@ -1344,50 +1344,18 @@ import { createTrackCenterline } from './game/Track.js';
                 trackSamples[i].clearanceScale = clearanceScales[i];
             }
 
-            // Build stable road frames. The old 1.47 miter expansion could create
-            // spikes at tight turns; width now shrinks locally before offsets fold.
+            // The centerline normal is already smooth and normalized. Do not
+            // shrink the road merely because a corner is tight: that caused
+            // visible pinches and made the road edge disagree with collisions.
+            // Only the self-clearance pass may narrow a section where two
+            // separate parts of the circuit run dangerously close together.
             for (let i = 0; i < TRACK_SAMPLES_COUNT; i++) {
-                const prev = trackSamples[(i - 1 + TRACK_SAMPLES_COUNT) % TRACK_SAMPLES_COUNT];
                 const current = trackSamples[i];
-                const following = trackSamples[(i + 1) % TRACK_SAMPLES_COUNT];
-
-                const incoming = new THREE.Vector3(
-                    current.pt.x - prev.pt.x, 0, current.pt.z - prev.pt.z
-                );
-                const outgoing = new THREE.Vector3(
-                    following.pt.x - current.pt.x, 0, following.pt.z - current.pt.z
-                );
-                const beforeLength = incoming.length();
-                const afterLength = outgoing.length();
-
-                if (beforeLength < 1e-5 || afterLength < 1e-5) {
-                    current.right.copy(current.baseRight);
-                    current.miterScale = 1;
-                    continue;
-                }
-
-                incoming.multiplyScalar(1 / beforeLength);
-                outgoing.multiplyScalar(1 / afterLength);
-
-                const turnCos = THREE.MathUtils.clamp(incoming.dot(outgoing), -1, 1);
-                const turnAngle = Math.acos(turnCos);
-                const averageStep = (beforeLength + afterLength) * 0.5;
-                const radius = turnAngle > 1e-4
-                    ? averageStep / (2 * Math.sin(turnAngle * 0.5))
-                    : Infinity;
-
-                // A tangent-normal ribbon avoids long miter spikes entirely.
-                // Both edges remain centered and only narrow when curvature or
-                // neighbouring track sections require additional clearance.
-                current.right.copy(current.baseRight);
-                const safeHalfWidth = Math.max(1.5, radius - 2.5);
-                const curvatureLimit = Number.isFinite(radius)
-                    ? Math.min(1, safeHalfWidth / ROAD_HALF_WIDTH)
-                    : 1;
-                current.miterScale = Math.min(
-                    1,
-                    curvatureLimit,
-                    current.clearanceScale ?? 1
+                current.right.copy(current.baseRight).normalize();
+                current.miterScale = THREE.MathUtils.clamp(
+                    current.clearanceScale ?? 1,
+                    0.06,
+                    1
                 );
             }
 
@@ -1908,20 +1876,21 @@ import { createTrackCenterline } from './game/Track.js';
             const lateralOffset = relVec.dot(nearest.right);
             const localMiterScale = nearest.miterScale || 1;
             const asphaltEdge = ROAD_HALF_WIDTH * localMiterScale;
-            const gravelWidth = 13.5 * localMiterScale;
+            // A narrow invisible runoff strip keeps the previous grip penalty,
+            // but there is no broad gravel apron between the asphalt and rails.
+            const runoffWidth = 1.35 * localMiterScale;
             const outsideAsphalt = Math.max(0, Math.abs(lateralOffset) - asphaltEdge);
             if (outsideAsphalt > 0) {
-                // Gravel rapidly bleeds speed without locking the car or disabling controls.
-                // Exponential drag is frame-rate independent and approaches zero smoothly.
-                const gravelDepth = Math.min(1, outsideAsphalt / gravelWidth);
-                const gravelDragRate = 0.75 + gravelDepth * 0.35;
+                const runoffDepth = Math.min(1, outsideAsphalt / Math.max(0.1, runoffWidth));
+                const dragRate = 0.75 + runoffDepth * 0.35;
                 const currentSpeed = Math.abs(player.speed);
-                const reducedSpeed = currentSpeed * Math.exp(-gravelDragRate * dt);
+                const reducedSpeed = currentSpeed * Math.exp(-dragRate * dt);
                 const minimumRollingSpeed = keys.w && player.speed > 0 ? 0.28 : 0;
                 player.speed = Math.sign(player.speed) * Math.max(minimumRollingSpeed, reducedSpeed);
             }
 
-            const maxLateral = WALL_OFFSET * localMiterScale - 1.55;
+            // Match the collision boundary to the new close-set guardrail.
+            const maxLateral = (ROAD_HALF_WIDTH + 1.05 + 0.32) * localMiterScale - 1.05;
             if (Math.abs(lateralOffset) > maxLateral) {
                 const sign = Math.sign(lateralOffset);
                 const clampedPos = nearest.pt.clone().addScaledVector(nearest.right, sign * maxLateral);
