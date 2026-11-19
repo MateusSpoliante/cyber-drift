@@ -1865,127 +1865,93 @@ import { PhysicsWorld, VehicleController } from './engine/index.js';
                 document.getElementById('speed-lines').style.opacity = '0';
             }
 
-            // Progressive engine delivery: engine force tapers with speed and fights aerodynamic drag.
-            const topSpeed = player.isNitro ? NITRO_TOP_SPEED : BASE_TOP_SPEED;
-            const speedNorm = Math.max(0, Math.min(1.25, Math.abs(player.speed) / BASE_TOP_SPEED));
-            const torqueCurve = Math.max(0.62, 1.12 - 0.39 * speedNorm);
-            const aeroDrag = 0.018 + speedNorm * speedNorm * 0.115;
-            const engineAcceleration = player.isNitro ? 0.46 : 0.285;
-
-            if (keys.w) {
-                if (player.speed < topSpeed) {
-                    player.speed = Math.min(topSpeed, player.speed + (engineAcceleration * torqueCurve - aeroDrag) * dt);
-                } else if (player.speed > topSpeed) {
-                    // When ERS ends, speed bleeds off naturally instead of snapping to the normal limiter.
-                    player.speed = Math.max(topSpeed, player.speed - aeroDrag * dt);
-                }
-            } else if (keys.s) {
-                if (player.speed > 0.035) {
-                    const brakeForce = 0.78 + Math.min(1, speedNorm) * 0.48;
-                    player.speed = Math.max(0, player.speed - brakeForce * dt);
-                } else {
-                    player.speed = Math.max(-0.48, player.speed - 0.38 * dt);
-                }
-            } else {
-                // Rolling resistance at low speed plus quadratic aerodynamic drag at high speed.
-                const coastDrag = 0.018 + speedNorm * speedNorm * 0.115;
-                if (player.speed > 0) player.speed = Math.max(0, player.speed - coastDrag * dt);
-                if (player.speed < 0) player.speed = Math.min(0, player.speed + 0.32 * dt);
-            }
-
-            // Keep a universal safety ceiling, but allow ERS overspeed to decay progressively.
-            player.speed = Math.max(-0.48, Math.min(NITRO_TOP_SPEED, player.speed));
-
-            // Responsive steering with high-speed stability & trail-braking turn-in boost
+            // Rapier owns the active vehicle dynamics. Inputs are collected at
+            // render rate, while suspension, wheel forces and collisions run at
+            // a deterministic 120 Hz fixed timestep.
             const targetSteer = (keys.a ? 1 : 0) - (keys.d ? 1 : 0);
             const steerResponsiveness = player.isDrifting ? 15.5 : 13.5;
             player.steerInput += (targetSteer - player.steerInput) * Math.min(1, dt * steerResponsiveness);
 
-            player.isDrifting = keys.space && Math.abs(player.speed) > 0.55 && Math.abs(player.steerInput) > 0.14;
-            document.getElementById('drift-bonus-tag').style.opacity = player.isDrifting ? '1' : '0.35';
+            const signedSpeed = physicsVehicle ? physicsVehicle.speedKmh / 3.6 : 0;
+            const braking = keys.s && signedSpeed > 0.8;
+            const reversing = keys.s && signedSpeed <= 0.8;
+            if (physicsVehicle) {
+                physicsVehicle.tuning.engineForce = player.isNitro ? 14800 : 10500;
+                physicsVehicle.setInput({
+                    throttle: keys.w ? 1 : 0,
+                    reverse: reversing ? 1 : 0,
+                    brake: braking ? 1 : 0,
+                    steer: player.steerInput,
+                    handbrake: keys.space && Math.abs(signedSpeed) > 4 ? 1 : 0
+                });
 
-            if (Math.abs(player.speed) > 0.03) {
-                const reverseFactor = player.speed >= 0 ? 1 : -1;
-                const speedSteerScale = Math.min(1.0, Math.abs(player.speed) / 0.45);
-                const trailBrakeBonus = (keys.s && player.speed > 0.4) ? 1.14 : 1.0;
-                const highSpeedDamp = 1.0 - Math.max(0, (Math.abs(player.speed) - 1.5) * 0.14);
-                const baseTurn = player.isDrifting ? 2.68 : 2.04;
-                const turnRate = baseTurn * speedSteerScale * trailBrakeBonus * highSpeedDamp;
-                player.heading += player.steerInput * turnRate * reverseFactor * dt;
-            }
+                physicsAccumulator = Math.min(
+                    physicsAccumulator + dt,
+                    PHYSICS_FIXED_STEP * 8
+                );
+                let substeps = 0;
+                while (physicsAccumulator >= PHYSICS_FIXED_STEP && substeps < 8) {
+                    const speedRatio = Math.min(1, Math.abs(physicsVehicle.speedKmh) / 400);
+                    physicsVehicle.body.setLinearDamping(0.08 + speedRatio * speedRatio * 0.72);
+                    physicsVehicle.preStep(PHYSICS_FIXED_STEP);
+                    physicsWorld.step(PHYSICS_FIXED_STEP);
+                    physicsVehicle.postStep();
+                    physicsAccumulator -= PHYSICS_FIXED_STEP;
+                    substeps++;
+                }
 
-            // Track-dependent tire grip & controlled drift slip
-            const baseGrip = (player.isDrifting ? 3.2 : 11.4) * trackConfig.gripMultiplier;
-            let angleDiff = player.heading - player.velAngle;
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-            player.velAngle += angleDiff * Math.min(1, dt * baseGrip);
+                physicsVehicle.syncVisual(physicsAccumulator / PHYSICS_FIXED_STEP);
+                player.pos.copy(playerCar.mesh.position);
+                const vehicleEuler = new THREE.Euler().setFromQuaternion(
+                    physicsVehicle.currentRotation,
+                    'YXZ'
+                );
+                player.heading = vehicleEuler.y;
+                const velocity = physicsVehicle.velocity;
+                const planarSpeed = Math.hypot(velocity.x, velocity.z);
+                player.velAngle = planarSpeed > 0.15
+                    ? Math.atan2(velocity.x, velocity.z)
+                    : player.heading;
+                player.speed = Math.abs(physicsVehicle.speedKmh) / SPEED_MULTIPLIER;
+                player.isDrifting = physicsVehicle.isDrifting ||
+                    (keys.space && planarSpeed > 4 && Math.abs(physicsVehicle.slipAngle) > 0.12);
 
-            if (player.isDrifting) {
-                // Counter-steer drift maintains more momentum
-                const slipEfficiency = Math.abs(angleDiff) < 0.75 ? 0.08 : 0.14;
-                player.speed *= (1 - slipEfficiency * dt);
-            }
-
-            // Move car
-            const moveStep = player.speed * 62 * dt;
-            player.pos.x += Math.sin(player.velAngle) * moveStep;
-            player.pos.z += Math.cos(player.velAngle) * moveStep;
-
-            // Barrier collision & proportional wall-scrape response
-            const nearest = findNearestTrackSample(player.pos.x, player.pos.z, player.trackT);
-            const relVec = new THREE.Vector3(player.pos.x - nearest.pt.x, 0, player.pos.z - nearest.pt.z);
-            const lateralOffset = relVec.dot(nearest.right);
-            const localMiterScale = nearest.miterScale || 1;
-            const asphaltEdge = ROAD_HALF_WIDTH * localMiterScale;
-            // A narrow invisible runoff strip keeps the previous grip penalty,
-            // but there is no broad gravel apron between the asphalt and rails.
-            const runoffWidth = 1.35 * localMiterScale;
-            const outsideAsphalt = Math.max(0, Math.abs(lateralOffset) - asphaltEdge);
-            if (outsideAsphalt > 0) {
-                const runoffDepth = Math.min(1, outsideAsphalt / Math.max(0.1, runoffWidth));
-                const dragRate = 0.75 + runoffDepth * 0.35;
-                const currentSpeed = Math.abs(player.speed);
-                const reducedSpeed = currentSpeed * Math.exp(-dragRate * dt);
-                const minimumRollingSpeed = keys.w && player.speed > 0 ? 0.28 : 0;
-                player.speed = Math.sign(player.speed) * Math.max(minimumRollingSpeed, reducedSpeed);
-            }
-
-            // Match the collision boundary to the new close-set guardrail.
-            const maxLateral = (ROAD_HALF_WIDTH + 1.05 + 0.32) * localMiterScale - 1.05;
-            if (Math.abs(lateralOffset) > maxLateral) {
-                const sign = Math.sign(lateralOffset);
-                const clampedPos = nearest.pt.clone().addScaledVector(nearest.right, sign * maxLateral);
-                player.pos.x = clampedPos.x;
-                player.pos.z = clampedPos.z;
-
-                const wallTangentAngle = Math.atan2(nearest.tangent.x, nearest.tangent.z);
-                let wallDiff = wallTangentAngle - player.heading;
-                while (wallDiff > Math.PI) wallDiff -= Math.PI * 2;
-                while (wallDiff < -Math.PI) wallDiff += Math.PI * 2;
-
-                const impactSeverity = Math.min(1, Math.abs(Math.sin(wallDiff)));
-                player.heading += wallDiff * 0.30;
-                player.velAngle = player.heading;
-
-                if (Math.abs(player.speed) > 0.35) {
-                    player.speed *= (0.95 - impactSeverity * 0.14);
-                    cameraShake = Math.max(cameraShake, 0.12 + impactSeverity * 0.28);
-                    sound.playBump(0.25 + impactSeverity * 0.65);
+                const nearestForGrip = findNearestTrackSample(player.pos.x, player.pos.z, player.trackT);
+                const relative = new THREE.Vector3(
+                    player.pos.x - nearestForGrip.pt.x,
+                    0,
+                    player.pos.z - nearestForGrip.pt.z
+                );
+                const lateral = relative.dot(nearestForGrip.right);
+                const localScale = nearestForGrip.miterScale || 1;
+                const roadEdge = ROAD_HALF_WIDTH * localScale;
+                const runoff = Math.max(0, Math.abs(lateral) - roadEdge);
+                if (runoff > 0.05) {
+                    const depth = Math.min(1, runoff / (1.35 * localScale));
+                    const drag = Math.exp(-(0.75 + depth * 0.35) * dt);
+                    const velocityNow = physicsVehicle.body.linvel();
+                    physicsVehicle.body.setLinvel({
+                        x: velocityNow.x * drag,
+                        y: velocityNow.y,
+                        z: velocityNow.z * drag
+                    }, true);
                 }
             }
 
-            // Follow the exact sampled deck height, including overpasses.
-            player.pos.y = nearest.pt.y;
+            document.getElementById('drift-bonus-tag').style.opacity = player.isDrifting ? '1' : '0.35';
+            playerCar.tailMat.color.setHex(keys.s && braking ? 0xff1e42 : 0x7f1d1d);
+            playerCar.flameL.visible = player.isNitro;
+            playerCar.flameR.visible = player.isNitro;
+            if (player.isNitro) {
+                const flicker = 0.85 + Math.random() * 0.65;
+                playerCar.flameL.scale.set(1.1, 1.1, flicker);
+                playerCar.flameR.scale.set(1.1, 1.1, flicker);
+            }
 
-            updateCarVisuals({
-                playerCar,
-                player,
-                keys,
-                dt,
-                moveStep,
-                spawnSmokeParticle
-            });
+            const nearest = findNearestTrackSample(player.pos.x, player.pos.z, player.trackT);
+            const angleDiff = player.heading - player.velAngle;
+            const normalizedAngle = THREE.MathUtils.euclideanModulo(angleDiff + Math.PI, Math.PI * 2) - Math.PI;
+
 
             if (player.isDrifting && Math.random() < 0.65) {
                 const rearLeft = new THREE.Vector3(-0.95, 0.25, -1.6).applyAxisAngle(new THREE.Vector3(0, 1, 0), player.heading).add(player.pos);
@@ -1998,7 +1964,7 @@ import { PhysicsWorld, VehicleController } from './engine/index.js';
             if (player.isDrifting) {
                 driftChainSeconds += dt;
                 driftCombo = Math.min(5, 1 + Math.floor(driftChainSeconds / 2) * 0.5);
-                const slip = Math.min(1, Math.abs(angleDiff) / 0.9);
+                const slip = Math.min(1, Math.abs(normalizedAngle) / 0.9);
                 const speedFactor = Math.max(0, Math.abs(player.speed) * 35);
                 driftScore += Math.round((8 + speedFactor * slip) * driftCombo * dt);
             } else {
