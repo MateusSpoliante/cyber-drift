@@ -164,7 +164,7 @@ export function buildTrackGeometry({
         }
 
         for (const side of [-1, 1]) {
-            const center = Math.max(roadHalfWidth + 2.8, wallOffset * (a.half / roadHalfWidth)) + 0.7;
+            const center = wallOffset * (a.half / roadHalfWidth) + 0.7;
             const p0 = new THREE.Vector3(a.point.x + a.right.x * side * center, a.y + 0.02, a.point.z + a.right.z * side * center);
             const p1 = new THREE.Vector3(p0.x, a.y + 1.15, p0.z);
             const q0 = new THREE.Vector3(b.point.x + b.right.x * side * center, b.y + 0.02, b.point.z + b.right.z * side * center);
