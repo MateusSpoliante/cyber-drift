@@ -26,6 +26,9 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 document.body.appendChild(renderer.domElement);
 
+const lighting = new LightingRig(scene, renderer);
+const cameraRig = new CameraRig(camera);
+
 const physics = await PhysicsWorld.create({ fixedTimeStep: 1 / 120 });
 physics.createGround();
 
