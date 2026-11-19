@@ -4,7 +4,6 @@ import * as THREE from 'three';
 export class CameraController {
     constructor(camera) {
         this.camera = camera;
-        this.maxSpeed = 1;
         this.up = new THREE.Vector3(0, 1, 0);
         this.hoodOffset = new THREE.Vector3();
         this.lookAhead = new THREE.Vector3();
