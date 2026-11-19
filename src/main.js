@@ -4,7 +4,8 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
 import { createSportsCarMesh, updateCarVisuals } from './game/Car.js';
 import { CameraController } from './game/CameraController.js';
 import { createTrackCenterline } from './game/Track.js';
-import { PhysicsWorld, VehicleController } from './engine/index.js';
+import { PhysicsWorld } from './engine/PhysicsWorld.js';
+import { VehicleController } from './engine/VehicleController.js';
 // ==========================================
         // 1. F1-INSPIRED CIRCUITS & TRACK CONFIGS
         // ==========================================
