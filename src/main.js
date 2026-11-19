@@ -1035,41 +1035,55 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
         // ==========================================
         function createAsphaltTexture(theme = 'urban') {
             const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 512;
-            const ctx = canvas.getContext('2d');
+            canvas.width = 1024;
+            canvas.height = 1024;
+            const ctx = canvas.getContext('2d', { alpha: false });
 
-            ctx.fillStyle = theme === 'desert' ? '#292621' : theme === 'alpine' ? '#222a32' : theme === 'suzuka' ? '#202733' : '#1f2731';
-            ctx.fillRect(0, 0, 512, 512);
+            const base = theme === 'desert' ? '#292722'
+                : theme === 'alpine' ? '#252d35'
+                : theme === 'suzuka' ? '#222a35'
+                : '#242c36';
+            ctx.fillStyle = base;
+            ctx.fillRect(0, 0, 1024, 1024);
 
-            for (let i = 0; i < 16000; i++) {
-                const x = Math.random() * 512;
-                const y = Math.random() * 512;
-                const shade = 20 + Math.floor(Math.random() * 28);
-                ctx.fillStyle = `rgb(${shade},${shade + 3},${shade + 8})`;
-                ctx.fillRect(x, y, 2, 2);
+            // Fine asphalt aggregate with a fixed seed: stable texture on every load.
+            let seed = 481516;
+            const random = () => {
+                seed = (seed * 1664525 + 1013904223) >>> 0;
+                return seed / 4294967296;
+            };
+            for (let i = 0; i < 42000; i++) {
+                const shade = 24 + Math.floor(random() * 25);
+                const alpha = 0.12 + random() * 0.24;
+                ctx.fillStyle = `rgba(${shade},${shade + 3},${shade + 7},${alpha})`;
+                const size = 1 + random() * 1.3;
+                ctx.fillRect(random() * 1024, random() * 1024, size, size);
             }
 
-            // Rubber racing groove in the center-right/left
-            const grooveGrad = ctx.createLinearGradient(0, 0, 512, 0);
-            grooveGrad.addColorStop(0, 'rgba(0,0,0,0)');
-            grooveGrad.addColorStop(0.28, 'rgba(5,7,12,0.35)');
-            grooveGrad.addColorStop(0.5, 'rgba(5,7,12,0.18)');
-            grooveGrad.addColorStop(0.72, 'rgba(5,7,12,0.35)');
-            grooveGrad.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = grooveGrad;
-            ctx.fillRect(0, 0, 512, 512);
+            // Subtle, continuous rubber racing lines; no baked-in white edge marks.
+            const groove = ctx.createLinearGradient(0, 0, 1024, 0);
+            groove.addColorStop(0, 'rgba(0,0,0,0.02)');
+            groove.addColorStop(0.22, 'rgba(0,0,0,0.13)');
+            groove.addColorStop(0.36, 'rgba(0,0,0,0.23)');
+            groove.addColorStop(0.5, 'rgba(0,0,0,0.12)');
+            groove.addColorStop(0.64, 'rgba(0,0,0,0.23)');
+            groove.addColorStop(0.78, 'rgba(0,0,0,0.13)');
+            groove.addColorStop(1, 'rgba(0,0,0,0.02)');
+            ctx.fillStyle = groove;
+            ctx.fillRect(0, 0, 1024, 1024);
 
-            // Outer white track limit lines
-            ctx.fillStyle = '#f1f5f9';
-            ctx.fillRect(14, 0, 9, 512);
-            ctx.fillRect(489, 0, 9, 512);
+            // Fine longitudinal wear, intentionally low contrast.
+            for (let i = 0; i < 90; i++) {
+                const x = random() * 1024;
+                ctx.fillStyle = `rgba(190,200,210,${0.012 + random() * 0.025})`;
+                ctx.fillRect(x, 0, 1 + random() * 2, 1024);
+            }
 
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.wrapS = THREE.RepeatWrapping;
-            tex.wrapT = THREE.RepeatWrapping;
-            tex.anisotropy = 8;
-            return tex;
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.anisotropy = renderer?.capabilities?.getMaxAnisotropy?.() || 8;
+            return texture;
         }
 
         function createGroundTexture(theme = 'urban') {
