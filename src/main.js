@@ -1,4 +1,5 @@
 import './styles.css';
+import * as THREE from 'three';
 import { buildTrackGeometry } from './game/track/trackGeometry.js';
 // ==========================================
         // 1. F1-INSPIRED CIRCUITS & TRACK CONFIGS
@@ -467,31 +468,72 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
         let selectedAccentColor = '#FF6500';
         let localProfile = loadLocalProfile();
 
+        function createTrackPreviewSvg(points, active = false) {
+            if (!Array.isArray(points) || points.length < 3) return '';
+
+            const xs = points.map(point => point[0]);
+            const zs = points.map(point => point[1]);
+            const minX = Math.min(...xs), maxX = Math.max(...xs);
+            const minZ = Math.min(...zs), maxZ = Math.max(...zs);
+            const spanX = Math.max(1, maxX - minX);
+            const spanZ = Math.max(1, maxZ - minZ);
+            const width = 144, height = 76, padding = 9;
+            const scale = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanZ);
+            const offsetX = (width - spanX * scale) / 2;
+            const offsetY = (height - spanZ * scale) / 2;
+            const coords = points.map(([x, z]) => [
+                Number((offsetX + (x - minX) * scale).toFixed(1)),
+                Number((offsetY + (maxZ - z) * scale).toFixed(1))
+            ]);
+            const path = coords.map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${x},${y}`).join(' ') + ' Z';
+            const start = coords[0];
+            const stroke = active ? '#ff8533' : '#22d3ee';
+
+            return `
+                <svg class="track-preview-svg" viewBox="0 0 144 76" role="img" aria-label="Formato do circuito">
+                    <path d="${path}" fill="none" stroke="${stroke}" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" opacity="0.13"/>
+                    <path d="${path}" fill="none" stroke="${stroke}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="${path}" fill="none" stroke="#e2e8f0" stroke-width="1.1" stroke-dasharray="3 4" opacity="0.55"/>
+                    <circle cx="${start[0]}" cy="${start[1]}" r="3.3" fill="#f8fafc" stroke="#07111c" stroke-width="1.2"/>
+                </svg>
+            `;
+        }
+
         function renderTrackCards() {
             const container = document.getElementById('track-cards-grid');
             if (!container) return;
-            container.innerHTML = Object.entries(TRACKS).map(([id, t]) => {
+
+            container.innerHTML = Object.entries(TRACKS).map(([id, track]) => {
                 const active = id === selectedTrackId;
                 return `
-                    <button type="button" data-track-card="${id}" class="cyber-card w-full text-left p-3.5 rounded-xl cursor-pointer ${active ? 'track-card-active' : ''}">
-                        <div class="flex items-center justify-between gap-2 mb-1">
-                            <div class="flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full ${active ? 'bg-[#FF6500]' : 'bg-cyan-400'}"></span>
-                                <span class="font-orbitron font-black text-sm text-white tracking-wide">${t.name}</span>
-                            </div>
-                            <span class="text-[10px] font-orbitron font-bold px-2 py-0.5 rounded border ${t.diffColor}">${t.difficulty}</span>
-                        </div>
-                        <div class="text-[11px] font-orbitron text-cyan-300/90 mb-1">${t.f1Ref} • Largura ${t.roadWidth.toFixed(1)}m</div>
-                        <p class="text-xs text-slate-300 leading-snug">${t.description}</p>
+                    <button type="button" data-track-card="${id}" aria-pressed="${active}" class="cyber-card w-full flex items-center gap-3 text-left p-2.5 rounded-xl cursor-pointer ${active ? 'track-card-active' : ''}">
+                        <span class="track-preview shrink-0 w-28 h-[4.5rem] rounded-lg border border-slate-700/80 bg-slate-950/90 flex items-center justify-center overflow-hidden">
+                            ${createTrackPreviewSvg(track.points, active)}
+                        </span>
+                        <span class="min-w-0 flex-1">
+                            <span class="flex items-center justify-between gap-2 mb-1">
+                                <span class="font-orbitron font-black text-xs sm:text-sm text-white tracking-wide truncate">${track.name}</span>
+                                <span class="shrink-0 text-[9px] font-orbitron font-bold px-2 py-1 rounded border ${track.diffColor}">${track.difficulty}</span>
+                            </span>
+                            <span class="block text-[10px] font-orbitron text-cyan-300/90 truncate">${track.f1Ref.replace('Inspirado em ', '')}</span>
+                            <span class="block text-[10px] text-slate-400 mt-1">${track.roadWidth.toFixed(1)} m de largura · ${active ? 'SELECIONADA' : 'CLIQUE PARA SELECIONAR'}</span>
+                        </span>
                     </button>
                 `;
             }).join('');
 
-            container.querySelectorAll('[data-track-card]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    selectTrack(btn.dataset.trackCard);
+            // One delegated handler survives every list re-render and also catches clicks
+            // on the SVG/path inside each card.
+            if (!container.dataset.trackClickBound) {
+                container.addEventListener('click', event => {
+                    const target = event.target instanceof Element
+                        ? event.target.closest('[data-track-card]')
+                        : null;
+                    if (!target || !container.contains(target)) return;
+                    selectTrack(target.dataset.trackCard);
                 });
-            });
+                container.dataset.trackClickBound = 'true';
+            }
         }
 
         function selectTrack(trackId) {
@@ -2610,11 +2652,17 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
             }
         }
 
-        window.onload = async function () {
+        async function bootGame() {
             initThree();
             renderLeaderboards();
             await restoreSession();
             refreshRecordsFromApi();
             refreshGhost();
             requestAnimationFrame(animate);
-        };
+        }
+
+        if (document.readyState === 'complete') {
+            bootGame();
+        } else {
+            window.addEventListener('load', bootGame, { once: true });
+        }

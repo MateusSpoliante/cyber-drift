@@ -28,6 +28,7 @@
             height: 100vh;
             z-index: 1;
             display: block;
+            pointer-events: none;
         }
         /* Compact circular minimap strictly sized at 176x176 */
         #minimap-container {
@@ -119,4 +120,16 @@
         }
         .custom-scroll::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 101, 0, 0.75);
+        }
+
+        .track-preview-svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #track-cards-grid [data-track-card] {
+            position: relative;
+            z-index: 1;
+            pointer-events: auto;
         }

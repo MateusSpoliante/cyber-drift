@@ -146,6 +146,7 @@ export function buildTrackGeometry({
             color: 0x9a8060,
             roughness: 1,
             metalness: 0,
+            side: THREE.DoubleSide
         })
     );
     gravel.receiveShadow = true;
@@ -158,6 +159,7 @@ export function buildTrackGeometry({
             map: createAsphaltTexture(trackConfig.theme),
             roughness: 0.76,
             metalness: 0.12,
+            side: THREE.DoubleSide
         })
     );
     road.receiveShadow = true;
@@ -169,6 +171,7 @@ export function buildTrackGeometry({
         new THREE.MeshStandardMaterial({
             vertexColors: true,
             roughness: 0.62,
+            side: THREE.DoubleSide
         })
     );
     curbs.receiveShadow = true;
