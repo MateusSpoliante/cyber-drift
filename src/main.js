@@ -1735,8 +1735,6 @@ import { createTrackCenterline } from './game/Track.js';
             if (!timerStarted && keys.w) {
                 timerStarted = true;
                 player.lapStartTime = performance.now();
-                lapGhostSamples = [];
-                lastGhostSample = player.lapStartTime;
                 player.sector1Done = false; player.sector2Done = false;
                 showToast('CRONÔMETRO INICIADO');
             }
@@ -2482,7 +2480,6 @@ import { createTrackCenterline } from './game/Track.js';
 
             if (gameState === 'PLAYING') {
                 updatePlayerPhysics(dt);
-                updateGhost(now);
                 updateParticles(dt);
                 cameraShake = cameraController.update(player, cameraMode, dt, cameraShake, NITRO_TOP_SPEED);
                 if (now - lastHudUpdate >= 50) { updateHUD(now); lastHudUpdate = now; }
