@@ -1425,16 +1425,8 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
             lineMesh.position.y = 0.08;
             gantryGroup.add(lineMesh);
 
-            // F1 Starting Grid Boxes behind start line
-            const gridMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
-            for (let row = 0; row < 4; row++) {
-                const sideOffset = (row % 2 === 0 ? -1 : 1) * (ROAD_HALF_WIDTH * 0.36);
-                const zOffset = -10 - row * 9;
-                const box = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 5.2), gridMat);
-                box.rotation.x = -Math.PI / 2;
-                box.position.set(sideOffset, 0.07, zOffset);
-                gantryGroup.add(box);
-            }
+            // No decorative white grid plates: keep the start area clean.
+            // The checkered start/finish line above is the only large painted marker.
 
             const pillarGeo = new THREE.BoxGeometry(1.8, 11.5, 2.2);
             const pillarMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.8, roughness: 0.25 });
