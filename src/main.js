@@ -6,6 +6,7 @@ import { CameraController } from './game/CameraController.js';
 import { createTrackCenterline } from './game/Track.js';
 import { PhysicsWorld } from './engine/PhysicsWorld.js';
 import { VehicleController } from './engine/VehicleController.js';
+import { VFXSystem } from './engine/VFXSystem.js';
 // ==========================================
         // 1. F1-INSPIRED CIRCUITS & TRACK CONFIGS
         // ==========================================
@@ -955,7 +956,10 @@ import { VehicleController } from './engine/VehicleController.js';
         const NITRO_RECHARGE_DELAY = 0.85;
 
         let playerCar;
-        let particles = [];
+        let vfxSystem = null;
+        const smokeSpawnPosition = new THREE.Vector3();
+        const smokeSpawnVelocity = new THREE.Vector3(0, 1, 0);
+        const sparkNormal = new THREE.Vector3(0, 1, 0);
         let minimapBounds = { centerX: 0, centerZ: 0, scale: 1 };
 
         let gameState = 'MENU'; // MENU, PLAYING, PAUSED, MODAL
@@ -1755,79 +1759,63 @@ import { VehicleController } from './engine/VehicleController.js';
         // ==========================================
         // 7. PARTICLES (DRIFT SMOKE & NITRO SPARKS)
         // ==========================================
-        const smokeGeo = new THREE.SphereGeometry(0.45, 6, 6);
+        // Reuse instanced particle pools: drifting no longer creates and destroys
+        // dozens of individual meshes/materials every second.
         function spawnSmokeParticle(x, y, z, isNitroSpark = false) {
-            const mat = new THREE.MeshBasicMaterial({
-                color: isNitroSpark ? 0x00f0ff : 0xcbd5e1,
-                transparent: true,
-                opacity: isNitroSpark ? 0.85 : 0.42
-            });
-            const p = new THREE.Mesh(smokeGeo, mat);
-            p.position.set(x, y, z);
-            scene.add(p);
-            particles.push({
-                mesh: p,
-                life: 1.0,
-                vy: isNitroSpark ? 0.2 : (0.6 + Math.random() * 0.8),
-                scaleRate: isNitroSpark ? 0.2 : 2.5
-            });
+            if (!vfxSystem) return;
+            smokeSpawnPosition.set(x, y, z);
+            if (isNitroSpark) {
+                vfxSystem.emitSparks(smokeSpawnPosition, sparkNormal, 1);
+            } else {
+                smokeSpawnVelocity.set(0, 0.6 + Math.random() * 0.8, 0);
+                vfxSystem.emitSmoke(smokeSpawnPosition, smokeSpawnVelocity, 1);
+            }
         }
 
         function updateParticles(dt) {
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i];
-                p.life -= dt * 2.5;
-                if (p.life <= 0) {
-                    scene.remove(p.mesh);
-                    p.mesh.material.dispose();
-                    particles.splice(i, 1);
-                } else {
-                    p.mesh.position.y += p.vy * dt;
-                    p.mesh.scale.addScalar(p.scaleRate * dt);
-                    p.mesh.material.opacity = p.life * 0.4;
-                }
-            }
+            vfxSystem?.update(dt);
         }
 
         // ==========================================
         // 8. REFINED F1 TELEMETRY PHYSICS & COLLISIONS
         // ==========================================
         function findNearestTrackSample(x, z, preferredT = null) {
+            const count = trackSamples.length;
             let bestIdx = -1;
             let bestDistSq = Infinity;
-            const hasPreferredT = Number.isFinite(preferredT);
 
-            for (let i = 0; i < TRACK_SAMPLES_COUNT; i++) {
-                const sample = trackSamples[i];
-                if (hasPreferredT) {
-                    const rawDelta = Math.abs(sample.t - preferredT);
-                    const progressDelta = Math.min(rawDelta, 1 - rawDelta);
-                    if (progressDelta > 0.04) continue;
-                }
-
+            const testSample = index => {
+                const sample = trackSamples[index];
                 const dx = x - sample.pt.x;
                 const dz = z - sample.pt.z;
-                const dSq = dx * dx + dz * dz;
-                if (dSq < bestDistSq) {
-                    bestDistSq = dSq;
-                    bestIdx = i;
+                const distanceSq = dx * dx + dz * dz;
+                if (distanceSq < bestDistSq) {
+                    bestDistSq = distanceSq;
+                    bestIdx = index;
+                }
+            };
+
+            if (Number.isFinite(preferredT) && count > 0) {
+                // Search a small window around the previous progress first. This
+                // also prevents snapping to a nearby but different track segment.
+                const center = Math.round(THREE.MathUtils.euclideanModulo(preferredT, 1) * count) % count;
+                const radius = 18;
+                for (let offset = -radius; offset <= radius; offset++) {
+                    testSample((center + offset + count) % count);
                 }
             }
 
-            if (bestIdx < 0) {
-                for (let i = 0; i < TRACK_SAMPLES_COUNT; i++) {
-                    const pt = trackSamples[i].pt;
-                    const dx = x - pt.x;
-                    const dz = z - pt.z;
-                    const dSq = dx * dx + dz * dz;
-                    if (dSq < bestDistSq) {
-                        bestDistSq = dSq;
-                        bestIdx = i;
-                    }
-                }
+            // Recover from teleport, track reset or a large deviation only when
+            // the local window cannot find a plausible section of asphalt.
+            if (bestIdx < 0 || bestDistSq > 484) {
+                bestDistSq = Infinity;
+                for (let i = 0; i < count; i++) testSample(i);
             }
 
-            return { ...trackSamples[bestIdx], index: bestIdx, dist: Math.sqrt(bestDistSq) };
+            const nearest = trackSamples[bestIdx];
+            nearest.index = bestIdx;
+            nearest.dist = Math.sqrt(bestDistSq);
+            return nearest;
         }
 
         function updatePlayerPhysics(dt) {
@@ -2273,6 +2261,7 @@ import { VehicleController } from './engine/VehicleController.js';
         function initThree() {
             const canvas = document.getElementById('game-canvas');
             scene = new THREE.Scene();
+            vfxSystem = new VFXSystem(scene, { smokeCount: 96, sparkCount: 48, skidCapacity: 2400 });
             scene.background = new THREE.Color(0x060913);
             scene.fog = new THREE.FogExp2(0x060913, 0.0019);
 
@@ -2542,6 +2531,13 @@ import { VehicleController } from './engine/VehicleController.js';
         let prevFrameTime = 0;
         let lastHudUpdate = 0;
         let lastMinimapUpdate = 0;
+        let lastPreviewRender = 0;
+        let animationStarted = false;
+        function startRenderLoop() {
+            if (animationStarted) return;
+            animationStarted = true;
+            requestAnimationFrame(animate);
+        }
         function animate(now) {
             requestAnimationFrame(animate);
             if (!prevFrameTime) prevFrameTime = now;
@@ -2567,9 +2563,13 @@ import { VehicleController } from './engine/VehicleController.js';
             }
 
             renderer.render(scene, camera);
-            if (previewRenderer && previewScene && previewCamera && previewCar && !document.getElementById('garage-modal').classList.contains('hidden')) {
-                previewCar.mesh.rotation.y += 0.0035;
+            if (previewRenderer && previewScene && previewCamera && previewCar &&
+                now - lastPreviewRender >= 33 &&
+                !document.getElementById('garage-modal').classList.contains('hidden')) {
+                const previewDt = lastPreviewRender ? Math.min(0.05, (now - lastPreviewRender) / 1000) : 0;
+                previewCar.mesh.rotation.y += previewDt * 0.21;
                 previewRenderer.render(previewScene, previewCamera);
+                lastPreviewRender = now;
             }
         }
 
@@ -2585,7 +2585,7 @@ import { VehicleController } from './engine/VehicleController.js';
                 // Bring up the renderer before waiting for physics or network requests.
                 // A slow auth/records API must never leave the canvas black.
                 initThree();
-                requestAnimationFrame(animate);
+                startRenderLoop();
 
                 physicsWorld = await PhysicsWorld.create({ fixedTimeStep: PHYSICS_FIXED_STEP });
                 physicsWorld.createGround({ size: 3200, height: -0.36, friction: 1.1 });
@@ -2608,10 +2608,12 @@ import { VehicleController } from './engine/VehicleController.js';
                 }
                 // If physics fails, keep the scene rendering so the user sees
                 // an actionable error instead of a permanently black screen.
-                if (!renderer) {
+                if (renderer && scene && camera) {
+                    startRenderLoop();
+                } else {
                     try {
                         initThree();
-                        requestAnimationFrame(animate);
+                        startRenderLoop();
                     } catch (renderError) {
                         console.error('[Cyber Drift] Falha ao iniciar o renderizador:', renderError);
                     }
