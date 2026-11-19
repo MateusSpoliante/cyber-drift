@@ -234,83 +234,155 @@
     }
 }
 
-/* HUD estável: os números mudam, mas os painéis e colunas não redimensionam. */
-.hud-main-timing-panel {
-    width: 560px;
+/* HUD fixo: atualizações numéricas não alteram dimensões nem posição dos painéis. */
+#hud-top-left {
+    width: 600px;
     max-width: calc(100vw - 16px);
 }
+.hud-main-timing-panel {
+    width: 600px !important;
+    min-width: 600px;
+    max-width: calc(100vw - 16px);
+    contain: layout paint;
+}
 .hud-main-timing-panel > .flex.items-center.space-x-5 {
-    display: flex;
-    flex-wrap: nowrap !important;
+    display: flex !important;
+    flex-flow: row nowrap !important;
     align-items: center;
-    gap: 16px;
-    white-space: nowrap;
+    justify-content: space-between;
+    gap: 0 !important;
+    width: 100%;
+    min-width: 0;
+}
+.hud-main-timing-panel > .flex.items-center.space-x-5 > * {
+    flex: 0 0 auto !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
 }
 .hud-main-timing-panel > .flex.items-center.space-x-5 > div:not(.h-9) {
-    flex: 0 0 auto;
+    width: 145px;
+    min-width: 145px;
 }
-#timer-display,
-#best-display,
-#wr-display {
-    display: inline-block;
-    min-width: 8ch;
-    font-variant-numeric: tabular-nums;
+.hud-main-timing-panel > .flex.items-center.space-x-5 > .h-9 {
+    width: 1px;
+    min-width: 1px;
+}
+#timer-display, #best-display, #wr-display {
+    display: block;
+    width: 10ch;
+    min-width: 10ch;
+    max-width: 10ch;
     white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    contain: layout;
+}
+#lap-display {
+    display: block;
+    width: 3ch;
+    min-width: 3ch;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 .hud-speed-panel {
-    width: 456px;
+    width: 456px !important;
     min-width: 456px;
+    max-width: 456px;
+    contain: layout paint;
 }
 .hud-speed-content {
-    flex-wrap: nowrap !important;
+    display: flex !important;
+    flex-flow: row nowrap !important;
     align-items: center;
+    gap: 20px !important;
     white-space: nowrap;
 }
+.hud-speed-content > * {
+    flex: 0 0 auto !important;
+    margin-left: 0 !important;
+}
 .hud-speed-content > div:first-child {
-    flex: 0 0 150px;
+    width: 150px;
     min-width: 150px;
 }
 #speed-display {
     display: inline-block;
     width: 4ch;
+    min-width: 4ch;
     text-align: right;
     font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
 }
 .hud-speed-content .w-48 {
-    flex: 0 0 192px;
-    width: 192px;
+    width: 192px !important;
+    min-width: 192px;
+    max-width: 192px;
+}
+#nitro-text {
+    display: inline-block;
+    width: 15ch;
+    min-width: 15ch;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    font-variant-numeric: tabular-nums;
 }
 @media (max-width: 900px) {
-    .hud-main-timing-panel { width: max-content; }
-    .hud-main-timing-panel > .flex.items-center.space-x-5 { gap: 8px; }
-    .hud-speed-panel {
-        width: min(420px, calc(100vw - 132px));
+    #hud-top-left { width: calc(100vw - 16px); }
+    .hud-main-timing-panel {
+        width: 100% !important;
         min-width: 0;
     }
-    .hud-speed-content > div:first-child {
-        flex-basis: 118px;
-        min-width: 118px;
+    .hud-main-timing-panel > .flex.items-center.space-x-5 {
+        gap: 8px !important;
+        justify-content: flex-start;
     }
+    .hud-main-timing-panel > .flex.items-center.space-x-5 > div:not(.h-9) {
+        width: 132px;
+        min-width: 132px;
+    }
+    .hud-speed-panel {
+        width: min(420px, calc(100vw - 132px)) !important;
+        min-width: 0;
+        max-width: min(420px, calc(100vw - 132px));
+    }
+    .hud-speed-content { gap: 10px !important; }
+    .hud-speed-content > div:first-child { width: 118px; min-width: 118px; }
     .hud-speed-content .w-48 {
-        flex-basis: min(180px, 42vw);
-        width: min(180px, 42vw);
+        width: min(180px, 42vw) !important;
+        min-width: 0;
+        max-width: min(180px, 42vw);
     }
+    #nitro-text { width: 12ch; min-width: 12ch; }
 }
 @media (max-width: 560px) {
-    .hud-main-timing-panel { width: calc(100vw - 16px); }
-    .hud-main-timing-panel > .flex.items-center.space-x-5 { gap: 6px; }
-    .hud-main-timing-panel #timer-display { min-width: 8ch; font-size: 22px; }
-    .hud-speed-panel {
-        width: min(340px, calc(100vw - 110px));
-        min-width: 0;
+    .hud-main-timing-panel { padding: 10px 12px !important; }
+    .hud-main-timing-panel > .flex.items-center.space-x-5 {
+        gap: 6px !important;
     }
-    .hud-speed-content > div:first-child {
-        flex-basis: 76px;
-        min-width: 76px;
+    .hud-main-timing-panel > .flex.items-center.space-x-5 > div:nth-child(5),
+    .hud-main-timing-panel > .flex.items-center.space-x-5 > div:nth-child(6),
+    .hud-main-timing-panel > .flex.items-center.space-x-5 > div:nth-child(7) {
+        display: none !important;
     }
-    .hud-speed-content .w-48 {
-        flex-basis: 132px;
+    .hud-main-timing-panel > .flex.items-center.space-x-5 > div:not(.h-9) {
         width: 132px;
+        min-width: 132px;
     }
+    #timer-display, #best-display { width: 9ch; min-width: 9ch; max-width: 9ch; }
+    .hud-speed-panel {
+        width: min(340px, calc(100vw - 110px)) !important;
+        min-width: 0;
+        max-width: min(340px, calc(100vw - 110px));
+        padding: 10px !important;
+    }
+    .hud-speed-content { gap: 8px !important; }
+    .hud-speed-content > div:first-child { width: 76px; min-width: 76px; }
+    .hud-speed-content #speed-display { font-size: 34px; }
+    .hud-speed-content .w-48 {
+        width: 132px !important;
+        min-width: 0;
+        max-width: 132px;
+    }
+    #nitro-text { width: 10ch; min-width: 10ch; }
 }
-
