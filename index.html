@@ -191,15 +191,15 @@
                 </div>
 
                 <!-- Nitro Gauge -->
-                <div class="w-36">
+                <div class="w-44">
                     <div class="flex justify-between items-center mb-1">
                         <span class="text-[10px] text-cyan-400 font-orbitron tracking-wider">TURBO NITRO</span>
-                        <span id="nitro-text" class="text-[11px] font-orbitron font-bold text-[#FF6500]">100%</span>
+                        <span id="nitro-text" class="text-[10px] font-orbitron font-bold text-[#FF6500]">100%</span>
                     </div>
                     <div class="w-full h-4 bg-slate-900 rounded-full p-0.5 border border-[#FF6500]/60 overflow-hidden">
                         <div id="nitro-fill" class="h-full rounded-full bg-gradient-to-r from-[#FF6500] via-amber-400 to-cyan-300 shadow-[0_0_12px_#FF6500]" style="width: 100%;"></div>
                     </div>
-                    <div class="text-[9px] text-gray-400 font-orbitron mt-1 text-right">SHIFT / N</div>
+                    <div class="text-[9px] text-gray-400 font-orbitron mt-1 text-right">SHIFT / N · SOLTE E APERTE PARA REACENDER</div>
                 </div>
             </div>
         </div>
@@ -232,7 +232,7 @@
 
                 <div class="space-y-1.5 text-xs bg-slate-900/90 p-3.5 rounded-xl border border-cyan-500/25 mb-5 text-gray-300">
                     <div><b class="text-[#FF6500] font-orbitron">W / A / S / D</b> ou <b class="text-[#FF6500] font-orbitron">Setas</b>: Pilotar</div>
-                    <div><b class="text-cyan-400 font-orbitron">SHIFT</b> ou <b class="text-cyan-400 font-orbitron">N</b>: Ativar Nitro (440+ km/h)</div>
+                    <div><b class="text-cyan-400 font-orbitron">SHIFT</b> ou <b class="text-cyan-400 font-orbitron">N</b>: Ativar Nitro (440+ km/h) — esvaziou: superaquece 2,5 s</div>
                     <div><b class="text-[#FF6500] font-orbitron">ESPAÇO</b>: Drift + Recarga Rápida de Nitro</div>
                     <div><b class="text-cyan-400 font-orbitron">C / R / TAB</b>: Câmera / Pista / Reiniciar Volta</div>
                 </div>
@@ -556,7 +556,6 @@
             if (!Array.isArray(data) || data.length < 2) return;
             ghostData = data.slice(0,2500).filter(p=>Number.isFinite(Number(p.t)) && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.z)) && Number.isFinite(Number(p.h))).sort((a,b)=>a.t-b.t);
             try { localStorage.setItem(GHOST_KEY, JSON.stringify(ghostData)); } catch {}
-            showToast(`GHOST RACING: ${label} CARREGADO`);
         }
         async function refreshGhost() {
             try {
@@ -570,7 +569,7 @@
             }
         }
         function updateGhost(now) {
-            if (!ghostCar || ghostData.length < 2 || gameState !== 'PLAYING') { if (ghostCar) ghostCar.visible=false; return; }
+            if (true || !ghostCar || ghostData.length < 2 || gameState !== 'PLAYING') { if (ghostCar) ghostCar.visible=false; return; }
             const elapsed = now - player.lapStartTime;
             if (elapsed > Number(ghostData[ghostData.length-1].t)) { ghostCar.visible=false; return; }
             let i=1; while(i<ghostData.length && Number(ghostData[i].t)<elapsed) i++;
@@ -747,6 +746,9 @@
         const SPEED_MULTIPLIER = 155;
         const BASE_TOP_SPEED = 2.22;  // ~344 km/h
         const NITRO_TOP_SPEED = 2.88; // ~446 km/h
+        const NITRO_LOCK_TIME = 2.5;        // s travado após esvaziar
+        const NITRO_MIN_IGNITE = 25;        // % mínimo para reacender
+        const NITRO_RECHARGE_DELAY = 0.9;   // s sem recarga após soltar o nitro
 
         let playerCar;
         let particles = [];
@@ -763,6 +765,9 @@
             velAngle: 0,
             speed: 0,
             nitro: 100,
+            nitroLock: 0,
+            nitroDelay: 0,
+            nitroArmed: true,
             isNitro: false,
             isDrifting: false,
             steerInput: 0,
@@ -1431,7 +1436,7 @@
             player.heading = Math.atan2(s.tangent.x, s.tangent.z);
             player.velAngle = player.heading;
             player.speed = 0;
-            player.nitro = 100;
+            player.nitro = 100; player.nitroLock = 0; player.nitroDelay = 0; player.nitroArmed = true;
             player.trackT = 0;
             player.sector1Done = false;
             player.sector2Done = false;
@@ -1511,15 +1516,25 @@
 
         function updatePlayerPhysics(dt) {
             const nitroInput = keys.shift || keys.n;
-            player.isNitro = nitroInput && player.nitro > 1 && player.speed > 0.2;
+            // Nitro: ao esvaziar, trava (superaquece) por NITRO_LOCK_TIME; depois exige carga mínima para reacender.
+            if (!nitroInput) player.nitroArmed = true;           // precisa soltar a tecla para disparar de novo
+            if (player.nitroLock > 0) player.nitroLock = Math.max(0, player.nitroLock - dt);
+            const canIgnite = player.nitroLock <= 0 && player.nitroArmed && player.speed > 0.2 &&
+                (player.isNitro || player.nitro >= NITRO_MIN_IGNITE);
+            player.isNitro = nitroInput && canIgnite && player.nitro > 0;
 
             if (player.isNitro) {
                 player.nitro = Math.max(0, player.nitro - dt * 28);
+                player.nitroDelay = NITRO_RECHARGE_DELAY;
+                if (player.nitro <= 0) { player.isNitro = false; player.nitroLock = NITRO_LOCK_TIME; player.nitroArmed = false; showToast('NITRO SUPERAQUECIDO!'); }
                 document.getElementById('speed-lines').style.opacity = '1';
             } else {
-                // Passive recharge + fast recharge while drifting
-                const rechargeRate = player.isDrifting ? 26 : 9;
-                player.nitro = Math.min(100, player.nitro + dt * rechargeRate);
+                if (player.nitroDelay > 0) player.nitroDelay = Math.max(0, player.nitroDelay - dt);
+                // Sem recarga durante superaquecimento ou logo após usar; drift recarrega mais rápido.
+                if (player.nitroLock <= 0 && player.nitroDelay <= 0) {
+                    const rechargeRate = player.isDrifting ? 26 : 9;
+                    player.nitro = Math.min(100, player.nitro + dt * rechargeRate);
+                }
                 document.getElementById('speed-lines').style.opacity = '0';
             }
 
@@ -1830,8 +1845,14 @@
             else if (kmh > 3) gear = '1';
             document.getElementById('gear-display').innerText = gear;
 
-            document.getElementById('nitro-fill').style.width = `${player.nitro}%`;
-            document.getElementById('nitro-text').innerText = `${Math.round(player.nitro)}%`;
+            const nf = document.getElementById('nitro-fill'), nt = document.getElementById('nitro-text');
+            nf.style.width = `${player.nitro}%`;
+            const locked = player.nitroLock > 0, ready = !locked && player.nitro >= NITRO_MIN_IGNITE;
+            nf.style.filter = locked ? 'grayscale(1) brightness(.7)' : 'none';
+            nf.style.boxShadow = locked ? '0 0 10px #ef4444' : ready ? '0 0 14px #FF6500' : 'none';
+            nf.style.opacity = locked ? (Math.floor(now / 150) % 2 ? '.45' : '1') : (ready ? '1' : '.6');
+            nt.innerText = locked ? `SUPERAQUECIDO ${player.nitroLock.toFixed(1)}s` : (player.nitro < NITRO_MIN_IGNITE && !player.isNitro ? `CARREGANDO ${Math.round(player.nitro)}%` : `${Math.round(player.nitro)}%`);
+            nt.style.color = locked ? '#ef4444' : '#FF6500';
 
             const lapElapsed = now - player.lapStartTime;
             document.getElementById('timer-display').innerText = formatTime(lapElapsed);
@@ -1936,9 +1957,9 @@
                 powerPreference: 'high-performance'
             });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.shadowMap.type = THREE.PCFShadowMap;
 
             const hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x0f172a, 0.95);
             scene.add(hemiLight);

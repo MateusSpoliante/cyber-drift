@@ -47,3 +47,9 @@ Esses itens exigem infraestrutura, assets e trabalho adicional; não devem ser c
 - Se o banco estiver inacessível, o recorde entra numa fila (mesmo `clientRecordId`, sem duplicar) e é reenviado automaticamente ao voltar a conexão (evento `online`, a cada 30 s e ao abrir o jogo). A tela avisa claramente que o recorde está **pendente**, em vez de dizer que foi salvo.
 - Erros de validação do servidor (4xx) são mostrados ao jogador e não entram na fila.
 - O ranking local não é mais alterado de forma otimista: só mostra o que está no banco.
+
+## Nitro, fantasma e desempenho — 2026-11-19
+
+- Carro fantasma não aparece mais na pista (a telemetria continua sendo gravada e enviada ao banco).
+- Nitro: ao esvaziar, superaquece por 2,5 s (sem uso e sem recarga); depois exige 25% de carga e soltar/apertar a tecla para reacender. Há 0,9 s sem recarga após soltar o nitro, o que impede "pulsar" a tecla para recarregar. O HUD mostra superaquecimento, carregando e pronto.
+- Desempenho: pixel ratio limitado a 1,5 e sombras PCF simples.
