@@ -49,8 +49,8 @@ scene.add(carAsset.mesh);
 
 const vehicle = new VehicleController({
     physics,
-    spawn: { x: -60, y: 1.2, z: -20 },
-    visual: carAsset.mesh
+    spawn: { x: -60, y: 0.56, z: -20 },
+    visual: carAsset
 });
 
 const post = new RenderPipeline(renderer, scene, camera);
