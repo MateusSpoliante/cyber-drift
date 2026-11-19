@@ -54,6 +54,7 @@ export class VehicleController {
 
         this.body = physics.world.createRigidBody(bodyDesc);
         const chassisCollider = this.RAPIER.ColliderDesc.cuboid(0.92, 0.28, 2.05)
+            .setTranslation(0, -0.12, 0)
             .setMass(this.tuning.mass)
             .setFriction(0.7)
             .setRestitution(0.02);
