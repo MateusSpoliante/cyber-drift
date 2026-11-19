@@ -803,7 +803,8 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
             let i=1; while(i<ghostData.length && Number(ghostData[i].t)<elapsed) i++;
             const a=ghostData[Math.max(0,i-1)], b=ghostData[Math.min(i,ghostData.length-1)];
             const span=Math.max(1,Number(b.t)-Number(a.t)); const f=Math.max(0,Math.min(1,(elapsed-Number(a.t))/span));
-            ghostCar.position.set(Number(a.x)+(Number(b.x)-Number(a.x))*f,0.04,Number(a.z)+(Number(b.z)-Number(a.z))*f);
+            const ghostY = Number(a.y ?? 0) + (Number(b.y ?? 0) - Number(a.y ?? 0)) * f;
+            ghostCar.position.set(Number(a.x)+(Number(b.x)-Number(a.x))*f,ghostY + 0.04,Number(a.z)+(Number(b.z)-Number(a.z))*f);
             let dh=Number(b.h)-Number(a.h); while(dh>Math.PI)dh-=Math.PI*2; while(dh<-Math.PI)dh+=Math.PI*2;
             ghostCar.rotation.y=Number(a.h)+dh*f; ghostCar.visible=true;
         }
@@ -1156,6 +1157,87 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
         // ==========================================
         // 5. DISTINCT F1 CIRCUITS & THEMED WORLDS
         // ==========================================
+        // ==========================================
+        // TRACK TOPOLOGY & GRADE SEPARATION
+        // ==========================================
+        function findTrackCenterlineCrossings(samples) {
+            const count = samples.length;
+            const minGap = Math.max(18, Math.floor(count * 0.025));
+            const crossings = [];
+
+            function intersectSegments(a, b, c, d) {
+                const rx = b.x - a.x, rz = b.z - a.z;
+                const sx = d.x - c.x, sz = d.z - c.z;
+                const denominator = rx * sz - rz * sx;
+                if (Math.abs(denominator) < 1e-8) return null;
+
+                const qx = c.x - a.x, qz = c.z - a.z;
+                const t = (qx * sz - qz * sx) / denominator;
+                const u = (qx * rz - qz * rx) / denominator;
+                if (t <= 0.015 || t >= 0.985 || u <= 0.015 || u >= 0.985) return null;
+
+                return { t, u, x: a.x + t * rx, z: a.z + t * rz };
+            }
+
+            for (let i = 0; i < count; i++) {
+                const a = samples[i].pt;
+                const b = samples[(i + 1) % count].pt;
+
+                for (let j = i + minGap; j < count; j++) {
+                    const routeGap = Math.min(j - i, count - (j - i));
+                    if (routeGap < minGap) continue;
+
+                    const c = samples[j].pt;
+                    const d = samples[(j + 1) % count].pt;
+
+                    if (Math.max(a.x, b.x) < Math.min(c.x, d.x) - 0.01 ||
+                        Math.max(c.x, d.x) < Math.min(a.x, b.x) - 0.01 ||
+                        Math.max(a.z, b.z) < Math.min(c.z, d.z) - 0.01 ||
+                        Math.max(c.z, d.z) < Math.min(a.z, b.z) - 0.01) continue;
+
+                    const hit = intersectSegments(a, b, c, d);
+                    if (!hit) continue;
+
+                    const firstT = (i + hit.t) / count;
+                    const secondT = (j + hit.u) / count;
+                    const overT = Math.min(firstT, secondT);
+                    const underT = Math.max(firstT, secondT);
+
+                    const duplicate = crossings.some(existing =>
+                        Math.hypot(existing.x - hit.x, existing.z - hit.z) < 5 &&
+                        Math.abs(existing.overT - overT) < 0.015 &&
+                        Math.abs(existing.underT - underT) < 0.015
+                    );
+                    if (!duplicate) crossings.push({ x: hit.x, z: hit.z, overT, underT });
+                }
+            }
+
+            return crossings;
+        }
+
+        function getGradeSeparationHeight(progress, crossings) {
+            const height = 14;
+            const deckHalfLength = 0.012;
+            const rampHalfLength = 0.07;
+            let result = 0;
+
+            for (const crossing of crossings) {
+                const rawDistance = Math.abs(progress - crossing.overT);
+                const distance = Math.min(rawDistance, 1 - rawDistance);
+                if (distance >= rampHalfLength) continue;
+                if (distance <= deckHalfLength) {
+                    result = Math.max(result, height);
+                    continue;
+                }
+
+                const t = (distance - deckHalfLength) / (rampHalfLength - deckHalfLength);
+                const smooth = t * t * (3 - 2 * t);
+                result = Math.max(result, height * (1 - smooth));
+            }
+
+            return result;
+        }
+
         function buildWorldAndTrack() {
             if (trackWorld) {
                 trackWorld.traverse(obj => {
@@ -1201,18 +1283,59 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
                 trackSamples.push({ t, pt, tangent, baseRight, right: baseRight.clone(), miterScale: 1 });
             }
 
-            // Miter is calculated from the original tangent normals. The scale
-            // must be measured BEFORE replacing current.right with the miter.
+            // A flat 2D centerline cannot represent a real circuit crossover.
+            // Detect it from the actual spline samples and raise one branch.
+            const gradeSeparatedCrossings = findTrackCenterlineCrossings(trackSamples);
+            for (const sample of trackSamples) {
+                sample.pt.y = getGradeSeparationHeight(sample.t, gradeSeparatedCrossings);
+            }
+
+            // Build stable road frames. The old 1.47 miter expansion could create
+            // spikes at tight turns; width now shrinks locally before offsets fold.
             for (let i = 0; i < TRACK_SAMPLES_COUNT; i++) {
                 const prev = trackSamples[(i - 1 + TRACK_SAMPLES_COUNT) % TRACK_SAMPLES_COUNT];
                 const current = trackSamples[i];
                 const following = trackSamples[(i + 1) % TRACK_SAMPLES_COUNT];
+
+                const incoming = new THREE.Vector3(
+                    current.pt.x - prev.pt.x, 0, current.pt.z - prev.pt.z
+                );
+                const outgoing = new THREE.Vector3(
+                    following.pt.x - current.pt.x, 0, following.pt.z - current.pt.z
+                );
+                const beforeLength = incoming.length();
+                const afterLength = outgoing.length();
+
+                if (beforeLength < 1e-5 || afterLength < 1e-5) {
+                    current.right.copy(current.baseRight);
+                    current.miterScale = 1;
+                    continue;
+                }
+
+                incoming.multiplyScalar(1 / beforeLength);
+                outgoing.multiplyScalar(1 / afterLength);
+
+                const turnCos = THREE.MathUtils.clamp(incoming.dot(outgoing), -1, 1);
+                const turnAngle = Math.acos(turnCos);
+                const averageStep = (beforeLength + afterLength) * 0.5;
+                const radius = turnAngle > 1e-4
+                    ? averageStep / (2 * Math.sin(turnAngle * 0.5))
+                    : Infinity;
+
                 const miter = prev.baseRight.clone().add(following.baseRight);
-                if (miter.lengthSq() < 0.0001) continue;
-                miter.normalize();
-                const denominator = Math.max(0.68, Math.abs(miter.dot(current.baseRight)));
-                current.right.copy(miter);
-                current.miterScale = Math.min(1.47, 1 / denominator);
+                if (miter.lengthSq() < 1e-5) {
+                    current.right.copy(current.baseRight);
+                } else {
+                    miter.normalize();
+                    const alignment = Math.max(0.90, Math.abs(miter.dot(current.baseRight)));
+                    const miterLimit = Math.min(1.12, 1 / alignment);
+                    current.right.copy(miter);
+
+                    // Keep the inside edge away from the curve's center of rotation.
+                    const safeHalfWidth = Math.max(1.2, radius - 2.0);
+                    const curvatureLimit = safeHalfWidth / ROAD_HALF_WIDTH;
+                    current.miterScale = Math.min(miterLimit, curvatureLimit);
+                }
             }
 
             let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -1703,7 +1826,7 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
         }
         function resetPlayerToStart() {
             const s = trackSamples[0];
-            player.pos.set(s.pt.x, 0, s.pt.z);
+            player.pos.set(s.pt.x, s.pt.y, s.pt.z);
             player.heading = Math.atan2(s.tangent.x, s.tangent.z);
             player.velAngle = player.heading;
             player.speed = 0;
@@ -1727,8 +1850,8 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
         }
 
         function recoverPlayerOnTrack() {
-            const nearest = findNearestTrackSample(player.pos.x, player.pos.z);
-            player.pos.set(nearest.pt.x, 0, nearest.pt.z);
+            const nearest = findNearestTrackSample(player.pos.x, player.pos.z, player.trackT);
+            player.pos.set(nearest.pt.x, nearest.pt.y, nearest.pt.z);
             player.heading = Math.atan2(nearest.tangent.x, nearest.tangent.z);
             player.velAngle = player.heading;
             player.speed = 0;
@@ -1775,20 +1898,42 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
         // ==========================================
         // 8. REFINED F1 TELEMETRY PHYSICS & COLLISIONS
         // ==========================================
-        function findNearestTrackSample(x, z) {
-            let bestIdx = 0;
+        function findNearestTrackSample(x, z, preferredT = null) {
+            let bestIdx = -1;
             let bestDistSq = Infinity;
+            const hasPreferredT = Number.isFinite(preferredT);
+
             for (let i = 0; i < TRACK_SAMPLES_COUNT; i++) {
-                const pt = trackSamples[i].pt;
-                const dx = x - pt.x;
-                const dz = z - pt.z;
+                const sample = trackSamples[i];
+                if (hasPreferredT) {
+                    const rawDelta = Math.abs(sample.t - preferredT);
+                    const progressDelta = Math.min(rawDelta, 1 - rawDelta);
+                    if (progressDelta > 0.14) continue;
+                }
+
+                const dx = x - sample.pt.x;
+                const dz = z - sample.pt.z;
                 const dSq = dx * dx + dz * dz;
                 if (dSq < bestDistSq) {
                     bestDistSq = dSq;
                     bestIdx = i;
                 }
             }
-            return { ...trackSamples[bestIdx], dist: Math.sqrt(bestDistSq) };
+
+            if (bestIdx < 0) {
+                for (let i = 0; i < TRACK_SAMPLES_COUNT; i++) {
+                    const pt = trackSamples[i].pt;
+                    const dx = x - pt.x;
+                    const dz = z - pt.z;
+                    const dSq = dx * dx + dz * dz;
+                    if (dSq < bestDistSq) {
+                        bestDistSq = dSq;
+                        bestIdx = i;
+                    }
+                }
+            }
+
+            return { ...trackSamples[bestIdx], index: bestIdx, dist: Math.sqrt(bestDistSq) };
         }
 
         function updatePlayerPhysics(dt) {
@@ -1897,7 +2042,7 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
             player.pos.z += Math.cos(player.velAngle) * moveStep;
 
             // Barrier collision & proportional wall-scrape response
-            const nearest = findNearestTrackSample(player.pos.x, player.pos.z);
+            const nearest = findNearestTrackSample(player.pos.x, player.pos.z, player.trackT);
             const relVec = new THREE.Vector3(player.pos.x - nearest.pt.x, 0, player.pos.z - nearest.pt.z);
             const lateralOffset = relVec.dot(nearest.right);
             const localMiterScale = nearest.miterScale || 1;
@@ -1937,6 +2082,9 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
                     sound.playBump(0.25 + impactSeverity * 0.65);
                 }
             }
+
+            // Follow the exact sampled deck height, including overpasses.
+            player.pos.y = nearest.pt.y;
 
             // Visual car updates
             playerCar.mesh.position.copy(player.pos);
@@ -1991,7 +2139,7 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
             // Ghost sampling
             const ghostNow = performance.now();
             if (timerStarted && ghostNow - lastGhostSample >= 100) {
-                lapGhostSamples.push({ t: Math.max(0, ghostNow - player.lapStartTime), x: Number(player.pos.x.toFixed(2)), z: Number(player.pos.z.toFixed(2)), h: Number(player.heading.toFixed(3)) });
+                lapGhostSamples.push({ t: Math.max(0, ghostNow - player.lapStartTime), x: Number(player.pos.x.toFixed(2)), y: Number(player.pos.y.toFixed(2)), z: Number(player.pos.z.toFixed(2)), h: Number(player.heading.toFixed(3)) });
                 if (lapGhostSamples.length > 2500) lapGhostSamples.shift();
                 lastGhostSample = ghostNow;
             }

@@ -53,22 +53,22 @@ export function buildTrackGeometry({
         const curbLeft = sample.pt.clone().addScaledVector(sample.right, -outerCurb);
         const curbRight = sample.pt.clone().addScaledVector(sample.right, outerCurb);
 
-        roadPositions.push(left.x, 0.058, left.z, right.x, 0.058, right.z);
+        roadPositions.push(left.x, sample.pt.y + 0.058, left.z, right.x, sample.pt.y + 0.058, right.z);
         roadUvs.push(0, uvV, 1, uvV);
 
         gravelPositions.push(
-            gravelLeft.x, 0.025, gravelLeft.z,
-            left.x, 0.025, left.z,
-            right.x, 0.025, right.z,
-            gravelRight.x, 0.025, gravelRight.z
+            gravelLeft.x, sample.pt.y + 0.025, gravelLeft.z,
+            left.x, sample.pt.y + 0.025, left.z,
+            right.x, sample.pt.y + 0.025, right.z,
+            gravelRight.x, sample.pt.y + 0.025, gravelRight.z
         );
         gravelUvs.push(0, uvV, 0.42, uvV, 0.58, uvV, 1, uvV);
 
         curbPositions.push(
-            left.x, 0.075, left.z,
-            curbLeft.x, 0.075, curbLeft.z,
-            right.x, 0.075, right.z,
-            curbRight.x, 0.075, curbRight.z
+            left.x, sample.pt.y + 0.075, left.z,
+            curbLeft.x, sample.pt.y + 0.075, curbLeft.z,
+            right.x, sample.pt.y + 0.075, right.z,
+            curbRight.x, sample.pt.y + 0.075, curbRight.z
         );
 
         const stripeColor = curbPalette[Math.floor(i / 6) % 2];
@@ -77,17 +77,17 @@ export function buildTrackGeometry({
         }
 
         // Continuous barrier wall and a continuous luminous rail on each side.
-        const barrierCenter = wallOffset + 0.7;
+        const barrierCenter = wallOffset * miter + 0.7;
         for (const side of [-1, 1]) {
             const wallPoint = sample.pt.clone().addScaledVector(sample.right, side * barrierCenter);
             barrierPositions.push(
-                wallPoint.x, 0.02, wallPoint.z,
-                wallPoint.x, 1.15, wallPoint.z
+                wallPoint.x, sample.pt.y + 0.02, wallPoint.z,
+                wallPoint.x, sample.pt.y + 1.15, wallPoint.z
             );
             const railPoint = sample.pt.clone().addScaledVector(sample.right, side * barrierCenter);
             railPositions.push(
-                railPoint.x, 1.16, railPoint.z,
-                railPoint.x, 1.29, railPoint.z
+                railPoint.x, sample.pt.y + 1.16, railPoint.z,
+                railPoint.x, sample.pt.y + 1.29, railPoint.z
             );
         }
 
