@@ -1,14 +1,17 @@
 # Cyber Drift — engine de corrida
 
-A física ativa do carro principal já foi migrada para Rapier. O `main.js` continua responsável por menus, garagem, personalização, HUD, cronômetro, voltas, recordes e comunicação com o backend.
+O carro principal usa Rapier3D para física em tempo fixo. O main.js mantém a integração com menus, garagem, personalização, HUD, cronômetro, voltas, recordes e backend.
 
-## Integração ativa
+## Sistemas ativos
 
-- `PhysicsWorld`: inicialização do Rapier WASM, gravidade e passo fixo de 1/120 s.
-- `VehicleController`: chassi dinâmico, quatro rodas raycast, suspensão, tração traseira, direção, freio e freio de mão.
-- `main.js`: constrói colisores trimesh a partir das mesmas amostras usadas para desenhar o asfalto e os guardrails. Ao trocar de circuito, os colisores antigos são removidos e os novos são criados.
-- A posição e rotação do carro visual são interpoladas a partir do corpo físico. O carro não é mais movimentado pelo antigo modelo cinemático.
-- Os recordes continuam usando o fluxo existente; dados de carro fantasma e reprodução de fantasmas foram removidos.
+- PhysicsWorld: inicialização do Rapier WASM, gravidade e passo fixo de 1/120 s.
+- VehicleController: chassi dinâmico, quatro rodas raycast, suspensão, tração traseira, direção, freio e freio de mão.
+- main.js: cria colisores trimesh a partir das mesmas amostras usadas para desenhar asfalto e guardrails. Ao trocar de circuito, os colisores são reconstruídos.
+- CameraController: três modos de câmera com suavização independente do FPS; a matriz de projeção só é recalculada quando o FOV muda de forma perceptível.
+- VFXSystem: fumaça, faíscas de nitro e marcas de pneus usando InstancedMesh e buffers reutilizáveis. Os efeitos são limpos ao reiniciar ou trocar de pista.
+- main.js: renderização com ACES Filmic, resolução interna limitada, sem sombras em tempo real e cenário estático instanciado para reduzir draw calls.
+- SoundEngine dentro de main.js: motor, pneus, nitro e efeitos de interface via Web Audio API. A corrida não é bloqueada se o áudio não estiver disponível.
+- Os dados e a reprodução de carros fantasmas foram removidos do cliente, conforme solicitado.
 
 ## Escala e controles
 
@@ -22,17 +25,19 @@ O mundo usa metros e segundos. A simulação física roda a 120 Hz, com até oit
 - R: reposicionar o carro no centro da pista.
 - Tab: reiniciar a volta.
 
-## Módulos disponíveis para as próximas etapas
+## Módulos disponíveis, ainda não conectados ao loop principal
 
-- `Engine.js`: loop genérico com timestep fixo e interpolação.
-- `TrackBuilder.js`: construtor independente de pistas com spline, banking, zebras e barreiras físicas. As pistas atualmente usadas pelo jogo continuam sendo construídas pelo gerador existente em `src/game/track/trackGeometry.js`, com colisores Rapier paralelos.
-- `AudioSynth.js`: síntese de motor e pneus via Web Audio API.
-- `VFXSystem.js`: fumaça, faíscas e marcas de pneu com instancing.
-- `RenderPipeline.js`: EffectComposer, Bloom e SMAA.
-- `EnvironmentBuilder.js`: environment map procedural convertido via PMREM.
-- `CameraRig.js` e `LightingRig.js`: câmera spring-arm e iluminação PBR.
-- `UIManager.js`: atualização desacoplada do HUD.
+- Engine.js: loop genérico com timestep fixo e interpolação.
+- TrackBuilder.js: construtor independente de pistas com spline, banking, zebras e barreiras físicas. As pistas do jogo continuam usando src/game/track/trackGeometry.js e os colisores Rapier paralelos.
+- AudioSynth.js: alternativa modular de síntese de motor e pneus; o jogo ainda usa o SoundEngine existente em main.js.
+- RenderPipeline.js: EffectComposer, Bloom e SMAA. Não está ativo porque o pós-processamento adicionaria custo à GPU, contrário à prioridade atual de fluidez.
+- EnvironmentBuilder.js: environment map procedural via PMREM.
+- CameraRig.js e LightingRig.js: rigs alternativos; o jogo usa CameraController e iluminação própria.
+- UIManager.js: atualização desacoplada do HUD.
 
-## Próximas validações
+## Validação
 
-A integração de código foi feita, mas ainda precisa de build e teste no navegador. Validar especialmente aderência das rodas ao asfalto, frenagem, ré, resposta do freio de mão, colisões dos guardrails, troca de pista e velocidade máxima antes de calibrar os valores finais.
+- Sintaxe JavaScript dos arquivos alterados verificada.
+- O repositório possui workflow de CI para executar npm install e npm run build.
+- O último status do Vercel retornou limite de builds da conta, portanto o build final desta rodada ainda precisa de confirmação.
+- Ainda é necessário testar no navegador a dirigibilidade, aderência das rodas, frenagem, ré, freio de mão, colisões dos guardrails, troca de pistas, fumaça e marcas de pneus.
