@@ -49,7 +49,7 @@ scene.add(carAsset.mesh);
 
 const vehicle = new VehicleController({
     physics,
-    spawn: { x: -60, y: 0.56, z: -20 },
+    spawn: { x: -60, y: 0.56, z: -20, heading: 2.58 },
     visual: carAsset
 });
 
@@ -61,7 +61,7 @@ const keys = new Set();
 function updateInput() {
     vehicle.setInput({
         throttle: keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0,
-        brake: keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0,
+        reverse: keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0,\n        brake: keys.has('KeyX') ? 1 : 0,
         steer: (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0)
             - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0),
         handbrake: keys.has('Space') ? 1 : 0
@@ -110,7 +110,7 @@ engine.start();
 ## Módulos
 
 - `PhysicsWorld`: inicialização WASM, gravidade e timestep.
-- `VehicleController`: rigid body do chassi, quatro rodas raycast, suspensão, tração e frenagem.
+- `VehicleController`: rigid body do chassi, quatro rodas raycast, suspensão, tração, ré e frenagem.\n\nControles do exemplo: W acelera, S engata ré, X freia, A/D esterçam e Espaço aciona o freio de mão.
 - `TrackBuilder`: spline 3D, elevação, banking, asfalto, zebras e colisores de barreira.
 - `Engine`: acumulador de timestep fixo e interpolação visual.
 - `AudioSynth`: motor e chiado dos pneus sintetizados via Web Audio API.
