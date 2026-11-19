@@ -120,6 +120,25 @@ export class VFXSystem {
         this.skidGeometry.setDrawRange(0, this.skidCount * 2);
     }
 
+    clear() {
+        for (let i = 0; i < this.smokeCount; i++) {
+            this.smokeLife[i] = 0;
+            this.smokePositions[i].set(0, -10000, 0);
+            this.writeSmokeMatrix(i, 0.001);
+        }
+        for (let i = 0; i < this.sparkCount; i++) {
+            this.sparkLife[i] = 0;
+            this.sparkPositions[i].set(0, -10000, 0);
+            this.writeSparkMatrix(i, 0.001);
+        }
+        this.smoke.instanceMatrix.needsUpdate = true;
+        this.sparks.instanceMatrix.needsUpdate = true;
+        this.skidCount = 0;
+        this.skidPositions.fill(0);
+        this.skidGeometry.attributes.position.needsUpdate = true;
+        this.skidGeometry.setDrawRange(0, 0);
+    }
+
     update(dt) {
         for (let i = 0; i < this.smokeCount; i++) {
             if (this.smokeLife[i] <= 0) continue;
