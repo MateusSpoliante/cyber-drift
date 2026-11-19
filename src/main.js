@@ -590,8 +590,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
                 localProfile = {...localProfile,...data.player,name:data.player.username || data.player.displayName};
                 persistLocalProfile();
                 apiAvailable = true;
-                document.getElementById('start-btn').disabled = false;
-                document.getElementById('start-btn').classList.remove('opacity-50');
+                updateStartButtonState();
                 status.textContent = `Conectado como ${localProfile.name}.`;
                 status.className = 'text-[11px] text-emerald-300 mt-2 font-semibold';
                 document.getElementById('open-garage-btn').textContent = 'GARAGEM / MEU PERFIL';
@@ -612,16 +611,14 @@ import { VFXSystem } from './engine/VFXSystem.js';
                 authToken = 'active';
                 localProfile = {...localProfile,...data.player,name:data.player.username || data.player.displayName};
                 persistLocalProfile();
-                document.getElementById('start-btn').disabled = false;
-                document.getElementById('start-btn').classList.remove('opacity-50');
+                updateStartButtonState();
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('auth-status').textContent = `Conectado como ${localProfile.name}.`;
                 document.getElementById('auth-status').className = 'text-[11px] text-emerald-300 mt-2 font-semibold';
                 await syncPendingRecords();
             } catch {
                 authToken = '';
-                document.getElementById('start-btn').disabled = true;
-                document.getElementById('start-btn').classList.add('opacity-50');
+                updateStartButtonState();
             }
         }
 
@@ -2610,7 +2607,10 @@ import { VFXSystem } from './engine/VFXSystem.js';
             });
             document.getElementById('pause-exit-menu-btn').addEventListener('click', exitToMainMenu);
 
-            document.getElementById('start-btn').addEventListener('click', startTimeTrial);
+            document.getElementById('start-btn').addEventListener('click', () => {
+                if (!physicsReady) { void initializePhysics(); return; }
+                startTimeTrial();
+            });
             document.getElementById('login-btn').addEventListener('click', () => authenticate('login'));
             document.getElementById('register-btn').addEventListener('click', () => authenticate('register'));
             document.getElementById('auth-password').addEventListener('keydown', e => { if(e.key==='Enter') authenticate('login'); });
@@ -2618,8 +2618,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
             document.getElementById('logout-btn').addEventListener('click', async () => {
                 try { await fetch('/api/auth', {method:'DELETE'}); } catch {}
                 authToken = '';
-                document.getElementById('start-btn').disabled = true;
-                document.getElementById('start-btn').classList.add('opacity-50');
+                updateStartButtonState();
                 document.getElementById('logout-btn').classList.add('hidden');
                 document.getElementById('auth-status').textContent = 'Você saiu da conta. Entre novamente para jogar.';
                 document.getElementById('auth-status').className = 'text-[11px] text-slate-400 mt-2';
@@ -2682,9 +2681,23 @@ import { VFXSystem } from './engine/VFXSystem.js';
             });
         }
 
+        function updateStartButtonState() {
+            const button = document.getElementById('start-btn');
+            if (!button) return;
+            if (!physicsReady) {
+                button.disabled = false;
+                button.textContent = 'TENTAR INICIAR FÍSICA';
+                button.classList.remove('opacity-50');
+                return;
+            }
+            button.textContent = 'INICIAR CORRIDA';
+            button.disabled = !authToken;
+            button.classList.toggle('opacity-50', !authToken);
+        }
+
         function startTimeTrial() {
             if (!authToken) { showToast('ENTRE NA SUA CONTA ANTES DE JOGAR'); return; }
-            if (!physicsReady || !physicsVehicle) { showToast('AGUARDE A PISTA TERMINAR DE CARREGAR'); return; }
+            if (!physicsReady || !physicsVehicle) { showToast('FÍSICA AINDA NÃO ESTÁ PRONTA. TENTE NOVAMENTE.'); return; }
             try { sound.init(); } catch (error) { console.warn('[Cyber Drift] Áudio indisponível; corrida continuará sem som.', error); }
             document.getElementById('menu-overlay').classList.add('hidden');
             document.getElementById('record-modal').classList.add('hidden');
@@ -2749,52 +2762,61 @@ import { VFXSystem } from './engine/VFXSystem.js';
         }
 
         let bootStarted = false;
+        let physicsInitPromise = null;
+
+        async function initializePhysics() {
+            if (physicsReady && physicsVehicle) return true;
+            if (physicsInitPromise) return physicsInitPromise;
+            const button = document.getElementById('start-btn');
+            const status = document.getElementById('auth-status');
+            physicsInitPromise = (async () => {
+                button.disabled = true;
+                button.textContent = 'INICIANDO FÍSICA...';
+                if (status) { status.textContent = 'Preparando física e veículo...'; status.className = 'text-[11px] text-cyan-300 mt-2'; }
+                try {
+                    if (physicsWorld) { try { physicsWorld.dispose(); } catch {} physicsWorld = null; }
+                    physicsVehicle = null;
+                    physicsTrackColliders = [];
+                    physicsReady = false;
+                    physicsWorld = await PhysicsWorld.create({ fixedTimeStep: PHYSICS_FIXED_STEP });
+                    physicsWorld.createGround({ size: 3200, height: -0.36, friction: 1.1 });
+                    rebuildPhysicsTrack();
+                    createPhysicsVehicle();
+                    if (!physicsVehicle) throw new Error('O controlador do veículo não foi criado.');
+                    resetPlayerToStart();
+                    physicsReady = true;
+                    if (status && !authToken) { status.textContent = 'Física pronta. Entre na sua conta para iniciar a corrida.'; status.className = 'text-[11px] text-slate-300 mt-2'; }
+                    updateStartButtonState();
+                    return true;
+                } catch (error) {
+                    console.error('[Cyber Drift] Falha ao inicializar a física:', error);
+                    physicsReady = false;
+                    if (physicsWorld) { try { physicsWorld.dispose(); } catch {} physicsWorld = null; }
+                    physicsVehicle = null;
+                    if (status) { status.textContent = `Falha na física: ${error?.message || error}. Clique em “TENTAR INICIAR FÍSICA” para tentar novamente.`; status.className = 'text-[11px] text-red-300 mt-2'; }
+                    updateStartButtonState();
+                    return false;
+                } finally { physicsInitPromise = null; }
+            })();
+            return physicsInitPromise;
+        }
+
         async function bootGame() {
             if (bootStarted) return;
             bootStarted = true;
-
-            const startButton = document.getElementById('start-btn');
             const authStatus = document.getElementById('auth-status');
-
             try {
-                // Bring up the renderer before waiting for physics or network requests.
-                // A slow auth/records API must never leave the canvas black.
                 initThree();
                 startRenderLoop();
-
-                physicsWorld = await PhysicsWorld.create({ fixedTimeStep: PHYSICS_FIXED_STEP });
-                physicsWorld.createGround({ size: 3200, height: -0.36, friction: 1.1 });
-                rebuildPhysicsTrack();
-                createPhysicsVehicle();
-                resetPlayerToStart();
-                physicsReady = true;
-
-                // These are background tasks; neither one is allowed to block rendering.
-                void restoreSession();
-                void refreshRecordsFromApi();
             } catch (error) {
-                console.error('[Cyber Drift] Falha ao inicializar a física:', error);
-                if (startButton) {
-                    startButton.disabled = true;
-                    startButton.classList.add('opacity-50');
-                }
-                if (authStatus) {
-                    authStatus.textContent = 'Falha ao iniciar a física do jogo. Atualize a página; se persistir, verifique o console.';
-                    authStatus.className = 'text-[11px] text-red-300 mt-2';
-                }
-                // If physics fails, keep the scene rendering so the user sees
-                // an actionable error instead of a permanently black screen.
-                if (renderer && scene && camera) {
-                    startRenderLoop();
-                } else {
-                    try {
-                        initThree();
-                        startRenderLoop();
-                    } catch (renderError) {
-                        console.error('[Cyber Drift] Falha ao iniciar o renderizador:', renderError);
-                    }
-                }
+                console.error('[Cyber Drift] Falha ao iniciar o renderizador:', error);
+                if (authStatus) { authStatus.textContent = `Falha ao iniciar gráficos: ${error?.message || error}`; authStatus.className = 'text-[11px] text-red-300 mt-2'; }
+                return;
             }
+            // Login restoration must run even when Rapier fails to initialize.
+            void restoreSession();
+            void refreshRecordsFromApi();
+            await initializePhysics();
         }
 
         if (document.readyState === 'complete') {
