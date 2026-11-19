@@ -10,7 +10,7 @@ const WHEEL_LAYOUT = [
 const DEFAULT_TUNING = {
     mass: 1050,
     engineForce: 10500,
-    brakeForce: 190,
+    brakeForce: 1700,
     maxSteerAngle: 0.42,
     suspensionRestLength: 0.34,
     wheelRadius: 0.49,
