@@ -86,6 +86,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método não permitido.' });
   } catch (error) {
     console.error('records API error:', error);
-    return res.status(500).json({ error: 'Erro interno ao consultar/salvar recordes.' });
+    const code = error && (error.code || error.errno) ? String(error.code || error.errno) : undefined;
+    const hint = code === '42P01' ? 'Tabelas não existem: execute db/schema.sql no Supabase.'
+      : code === '28P01' || code === '28000' ? 'Usuário/senha do banco inválidos na DATABASE_URL.'
+      : code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'ETIMEDOUT' ? 'Não foi possível conectar ao host da DATABASE_URL.'
+      : undefined;
+    return res.status(500).json({ error: 'Erro interno ao consultar/salvar recordes.', code, hint });
   }
 }
