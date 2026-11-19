@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export class VFXSystem {
-    constructor(scene, { smokeCount = 180, skidCapacity = 6000 } = {}) {
+    constructor(scene, { smokeCount = 180, sparkCount = 96, skidCapacity = 6000 } = {}) {
         this.scene = scene;
         this.smokeCount = smokeCount;
         this.smokeCursor = 0;
@@ -47,6 +47,23 @@ export class VFXSystem {
             this.smoke.setMatrixAt(i, this.dummy.matrix);
         }
         this.smoke.instanceMatrix.needsUpdate = true;
+
+        this.sparkCount = sparkCount;
+        this.sparkCursor = 0;
+        this.sparkLife = new Float32Array(sparkCount);
+        this.sparkPositions = Array.from({ length: sparkCount }, () => new THREE.Vector3());
+        this.sparkVelocity = Array.from({ length: sparkCount }, () => new THREE.Vector3());
+        const sparkMaterial = new THREE.MeshBasicMaterial({ color: 0xffa24a, toneMapped: false });
+        this.sparks = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 5, 5), sparkMaterial, sparkCount);
+        this.sparks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        for (let i = 0; i < sparkCount; i++) {
+            this.dummy.position.set(0, -10000, 0);
+            this.dummy.scale.setScalar(0.001);
+            this.dummy.updateMatrix();
+            this.sparks.setMatrixAt(i, this.dummy.matrix);
+        }
+        this.sparks.instanceMatrix.needsUpdate = true;
+        this.scene.add(this.sparks);
     }
 
     emitSmoke(position, velocity = new THREE.Vector3(0, 1.1, 0), scale = 1) {
@@ -63,6 +80,29 @@ export class VFXSystem {
         this.dummy.scale.setScalar(scale);
         this.dummy.updateMatrix();
         this.smoke.setMatrixAt(index, this.dummy.matrix);
+    }
+
+    emitSparks(position, normal = new THREE.Vector3(0, 1, 0), intensity = 1) {
+        const count = Math.min(8, Math.max(2, Math.round(3 * intensity)));
+        for (let particle = 0; particle < count; particle++) {
+            const index = this.sparkCursor;
+            this.sparkCursor = (this.sparkCursor + 1) % this.sparkCount;
+            this.sparkLife[index] = 0.35 + Math.random() * 0.3;
+            this.sparkPositions[index].copy(position);
+            this.sparkVelocity[index].set(
+                (Math.random() - 0.5) * 9 + normal.x * 2,
+                2 + Math.random() * 7 + normal.y * 2,
+                (Math.random() - 0.5) * 9 + normal.z * 2
+            );
+            this.writeSparkMatrix(index, 0.7 + Math.random() * 0.8);
+        }
+    }
+
+    writeSparkMatrix(index, scale) {
+        this.dummy.position.copy(this.sparkPositions[index]);
+        this.dummy.scale.setScalar(scale);
+        this.dummy.updateMatrix();
+        this.sparks.setMatrixAt(index, this.dummy.matrix);
     }
 
     addSkidSegment(left, right) {
@@ -92,13 +132,30 @@ export class VFXSystem {
             this.writeSmokeMatrix(i, 0.18 + age * 0.85);
         }
         this.smoke.instanceMatrix.needsUpdate = true;
+
+        for (let i = 0; i < this.sparkCount; i++) {
+            if (this.sparkLife[i] <= 0) continue;
+            this.sparkLife[i] = Math.max(0, this.sparkLife[i] - dt * 2.8);
+            if (this.sparkLife[i] === 0) {
+                this.sparkPositions[i].set(0, -10000, 0);
+                this.writeSparkMatrix(i, 0.001);
+                continue;
+            }
+            this.sparkVelocity[i].y -= 14 * dt;
+            this.sparkPositions[i].addScaledVector(this.sparkVelocity[i], dt);
+            this.writeSparkMatrix(i, this.sparkLife[i] * 0.9);
+        }
+        this.sparks.instanceMatrix.needsUpdate = true;
     }
 
     dispose() {
         this.scene.remove(this.smoke);
+        this.scene.remove(this.sparks);
         this.scene.remove(this.skidMarks);
         this.smoke.geometry.dispose();
         this.smoke.material.dispose();
+        this.sparks.geometry.dispose();
+        this.sparks.material.dispose();
         this.skidGeometry.dispose();
         this.skidMaterial.dispose();
     }
