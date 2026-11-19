@@ -2555,6 +2555,8 @@ import { VFXSystem } from './engine/VFXSystem.js';
                     }
                 }
 
+                const movementKey = ['KeyW', 'ArrowUp', 'KeyS', 'ArrowDown', 'KeyA', 'ArrowLeft', 'KeyD', 'ArrowRight'].includes(e.code);
+                if (movementKey && gameState === 'PLAYING') e.preventDefault();
                 if (e.code === 'KeyW' || e.code === 'ArrowUp') keys.w = true;
                 if (e.code === 'KeyS' || e.code === 'ArrowDown') keys.s = true;
                 if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.a = true;
