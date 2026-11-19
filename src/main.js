@@ -1835,6 +1835,10 @@ import { VFXSystem } from './engine/VFXSystem.js';
         // 6. DETAILED 3D HYPER-SPORTS / F1 PROTOTYPE CAR
         // ==========================================
         function resetPlayerToStart() {
+            vfxSystem?.clear();
+            smokeSpawnAccumulator = 0;
+            skidMarkAccumulator = 0;
+            hasPreviousSkid = false;
             const s = trackSamples[0];
             player.pos.set(s.pt.x, s.pt.y, s.pt.z);
             player.heading = Math.atan2(s.tangent.x, s.tangent.z);
