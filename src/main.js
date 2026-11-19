@@ -4,6 +4,7 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
 import { createSportsCarMesh, updateCarVisuals } from './game/Car.js';
 import { CameraController } from './game/CameraController.js';
 import { createTrackCenterline } from './game/Track.js';
+import { PhysicsWorld, VehicleController } from './engine/index.js';
 // ==========================================
         // 1. F1-INSPIRED CIRCUITS & TRACK CONFIGS
         // ==========================================
@@ -458,6 +459,11 @@ import { createTrackCenterline } from './game/Track.js';
 
         let selectedTrackId = TRACKS[localStorage.getItem('cyber_drift_track_v1')] ? localStorage.getItem('cyber_drift_track_v1') : 'neon-city';
         let trackWorld = null;
+        let physicsWorld = null;
+        let physicsVehicle = null;
+        let physicsTrackColliders = [];
+        let physicsAccumulator = 0;
+        const PHYSICS_FIXED_STEP = 1 / 120;
         const PROFILE_KEY = 'cyber_drift_profile_v1';
         const DEVICE_KEY = 'cyber_drift_device_id_v1';
         const PENDING_KEY = 'cyber_drift_pending_records_v1';
@@ -554,6 +560,7 @@ import { createTrackCenterline } from './game/Track.js';
 
             renderTrackCards();
             buildWorldAndTrack();
+            rebuildPhysicsTrack();
             resetPlayerToStart();
             player.bestLapMs = null;
             document.getElementById('best-display').innerText = '--:--.--';
@@ -1340,6 +1347,84 @@ import { createTrackCenterline } from './game/Track.js';
             buildSceneryOutsideTrack(trackConfig);
         }
 
+        function rebuildPhysicsTrack() {
+            if (!physicsWorld) return;
+            for (const collider of physicsTrackColliders) {
+                physicsWorld.world.removeCollider(collider, true);
+            }
+            physicsTrackColliders = [];
+
+            const positions = [];
+            const indices = [];
+            const railPositions = [];
+            const railIndices = [];
+            const count = trackSamples.length;
+            const curbWidth = 1.05;
+            const railOffset = 0.32;
+            const railHeight = 0.98;
+
+            for (let i = 0; i < count; i++) {
+                const sample = trackSamples[i];
+                const scale = THREE.MathUtils.clamp(sample.miterScale ?? 1, 0.06, 1);
+                const half = ROAD_HALF_WIDTH * scale;
+                const left = sample.pt.clone().addScaledVector(sample.right, -half);
+                const right = sample.pt.clone().addScaledVector(sample.right, half);
+                left.y += 0.058;
+                right.y += 0.058;
+                positions.push(left.x,left.y,left.z,right.x,right.y,right.z);
+
+                const next = (i + 1) % count;
+                const base = i * 2;
+                const nextBase = next * 2;
+                indices.push(base,base+1,nextBase,base+1,nextBase+1,nextBase);
+
+                for (const side of [-1, 1]) {
+                    const edgeA = sample.pt.clone().addScaledVector(sample.right, side * (half + curbWidth + railOffset));
+                    const nextSample = trackSamples[next];
+                    const nextScale = THREE.MathUtils.clamp(nextSample.miterScale ?? 1, 0.06, 1);
+                    const nextHalf = ROAD_HALF_WIDTH * nextScale;
+                    const edgeB = nextSample.pt.clone().addScaledVector(nextSample.right, side * (nextHalf + curbWidth + railOffset));
+                    const baseIndex = railPositions.length / 3;
+                    railPositions.push(
+                        edgeA.x, edgeA.y + 0.02, edgeA.z,
+                        edgeA.x, edgeA.y + railHeight, edgeA.z,
+                        edgeB.x, edgeB.y + 0.02, edgeB.z,
+                        edgeB.x, edgeB.y + railHeight, edgeB.z
+                    );
+                    railIndices.push(baseIndex,baseIndex+1,baseIndex+2,baseIndex+1,baseIndex+3,baseIndex+2);
+                }
+            }
+
+            const roadCollider = physicsWorld.world.createCollider(
+                physicsWorld.RAPIER.ColliderDesc.trimesh(
+                    new Float32Array(positions),
+                    new Uint32Array(indices)
+                ).setFriction(1.35).setRestitution(0)
+            );
+            physicsTrackColliders.push(roadCollider);
+
+            const railsCollider = physicsWorld.world.createCollider(
+                physicsWorld.RAPIER.ColliderDesc.trimesh(
+                    new Float32Array(railPositions),
+                    new Uint32Array(railIndices)
+                ).setFriction(0.55).setRestitution(0.12)
+            );
+            physicsTrackColliders.push(railsCollider);
+        }
+
+        function createPhysicsVehicle() {
+            if (!physicsWorld || !playerCar) return;
+            if (physicsVehicle) physicsVehicle.dispose();
+            const start = trackSamples[0];
+            const heading = Math.atan2(start.tangent.x, start.tangent.z);
+            physicsVehicle = new VehicleController({
+                physics: physicsWorld,
+                spawn: { x: start.pt.x, y: start.pt.y + 0.56, z: start.pt.z, heading },
+                visual: playerCar
+            });
+            physicsAccumulator = 0;
+        }
+
         function buildTrackRibbonMeshes(trackConfig) {
             buildTrackGeometry({
                 trackSamples,
@@ -1638,8 +1723,16 @@ import { createTrackCenterline } from './game/Track.js';
             document.getElementById('s2-display').innerText = '--.--';
             document.getElementById('speed-lines').style.opacity = '0';
 
-            playerCar.mesh.position.copy(player.pos);
-            playerCar.mesh.rotation.set(0, player.heading, 0);
+            if (physicsVehicle) {
+                physicsVehicle.reset(
+                    { x: s.pt.x, y: s.pt.y + 0.56, z: s.pt.z },
+                    player.heading
+                );
+                physicsVehicle.syncVisual(1);
+            } else {
+                playerCar.mesh.position.copy(player.pos);
+                playerCar.mesh.rotation.set(0, player.heading, 0);
+            }
         }
 
         function recoverPlayerOnTrack() {
@@ -1648,6 +1741,13 @@ import { createTrackCenterline } from './game/Track.js';
             player.heading = Math.atan2(nearest.tangent.x, nearest.tangent.z);
             player.velAngle = player.heading;
             player.speed = 0;
+            if (physicsVehicle) {
+                physicsVehicle.reset(
+                    { x: nearest.pt.x, y: nearest.pt.y + 0.56, z: nearest.pt.z },
+                    player.heading
+                );
+                physicsVehicle.syncVisual(1);
+            }
             showToast('REPOSICIONADO NO CENTRO DA PISTA');
         }
 
@@ -2504,7 +2604,12 @@ import { createTrackCenterline } from './game/Track.js';
         }
 
         async function bootGame() {
+            physicsWorld = await PhysicsWorld.create({ fixedTimeStep: PHYSICS_FIXED_STEP });
+            physicsWorld.createGround({ size: 3200, height: -0.36, friction: 1.1 });
             initThree();
+            rebuildPhysicsTrack();
+            createPhysicsVehicle();
+            resetPlayerToStart();
             renderLeaderboards();
             await restoreSession();
             refreshRecordsFromApi();
