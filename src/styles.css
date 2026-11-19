@@ -233,3 +233,84 @@
         transition-duration: 0.01ms !important;
     }
 }
+
+/* HUD estável: os números mudam, mas os painéis e colunas não redimensionam. */
+.hud-main-timing-panel {
+    width: 560px;
+    max-width: calc(100vw - 16px);
+}
+.hud-main-timing-panel > .flex.items-center.space-x-5 {
+    display: flex;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    gap: 16px;
+    white-space: nowrap;
+}
+.hud-main-timing-panel > .flex.items-center.space-x-5 > div:not(.h-9) {
+    flex: 0 0 auto;
+}
+#timer-display,
+#best-display,
+#wr-display {
+    display: inline-block;
+    min-width: 8ch;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.hud-speed-panel {
+    width: 456px;
+    min-width: 456px;
+}
+.hud-speed-content {
+    flex-wrap: nowrap !important;
+    align-items: center;
+    white-space: nowrap;
+}
+.hud-speed-content > div:first-child {
+    flex: 0 0 150px;
+    min-width: 150px;
+}
+#speed-display {
+    display: inline-block;
+    width: 4ch;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.hud-speed-content .w-48 {
+    flex: 0 0 192px;
+    width: 192px;
+}
+@media (max-width: 900px) {
+    .hud-main-timing-panel { width: max-content; }
+    .hud-main-timing-panel > .flex.items-center.space-x-5 { gap: 8px; }
+    .hud-speed-panel {
+        width: min(420px, calc(100vw - 132px));
+        min-width: 0;
+    }
+    .hud-speed-content > div:first-child {
+        flex-basis: 118px;
+        min-width: 118px;
+    }
+    .hud-speed-content .w-48 {
+        flex-basis: min(180px, 42vw);
+        width: min(180px, 42vw);
+    }
+}
+@media (max-width: 560px) {
+    .hud-main-timing-panel { width: calc(100vw - 16px); }
+    .hud-main-timing-panel > .flex.items-center.space-x-5 { gap: 6px; }
+    .hud-main-timing-panel #timer-display { min-width: 8ch; font-size: 22px; }
+    .hud-speed-panel {
+        width: min(340px, calc(100vw - 110px));
+        min-width: 0;
+    }
+    .hud-speed-content > div:first-child {
+        flex-basis: 76px;
+        min-width: 76px;
+    }
+    .hud-speed-content .w-48 {
+        flex-basis: 132px;
+        width: 132px;
+    }
+}
+
