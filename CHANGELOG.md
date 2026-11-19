@@ -1,3 +1,11 @@
+## Correções de pistas, brita e garagem — 2026-11-19
+
+- Restaurada a interpolação centrípeta dos circuitos para evitar overshoot em curvas fechadas.
+- Bordas do asfalto, zebras e barreiras usam normais de deslocamento com miter limitado para reduzir cruzamentos e picos na geometria.
+- Adicionada faixa visual de brita dos dois lados da pista.
+- A brita aplica resistência elevada ao rolamento e reduz a velocidade progressivamente, sem travamento instantâneo.
+- A lista de garagens públicas mostra somente o perfil mais recentemente atualizado para cada nome de piloto, preservando as cores do último carro salvo nesse perfil.
+
 # Alterações — Cyber Drift 3D
 
 ## Implementado nesta entrega

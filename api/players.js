@@ -20,8 +20,16 @@ export default async function handler(req, res) {
       return res.status(200).json({ player: { ...rows[0], level: Math.floor(Number(rows[0].xp || 0) / 500) + 1 } });
     }
     if (req.method === 'GET') {
-      const players = await sql`SELECT p.id, p.display_name AS "displayName", p.xp, p.races, p.best_time AS "bestTime" FROM players p ORDER BY p.xp DESC, p.best_time ASC NULLS LAST LIMIT 20`;
-      return res.status(200).json({ players: players.map(p => ({ ...p, level: Math.floor(Number(p.xp || 0) / 500) + 1 })) });
+      const players = await sql`
+        SELECT DISTINCT ON (LOWER(BTRIM(p.display_name)))
+          p.id, p.display_name AS "displayName", p.xp, p.races,
+          p.best_time AS "bestTime", p.body_color AS "bodyColor",
+          p.accent_color AS "accentColor", p.updated_at AS "updatedAt"
+        FROM players p
+        ORDER BY LOWER(BTRIM(p.display_name)), p.updated_at DESC, p.created_at DESC
+      `;
+      players.sort((a, b) => Number(b.xp || 0) - Number(a.xp || 0) || (a.bestTime ?? Infinity) - (b.bestTime ?? Infinity));
+      return res.status(200).json({ players: players.slice(0, 20).map(p => ({ ...p, level: Math.floor(Number(p.xp || 0) / 500) + 1 })) });
     }
     if (req.method === 'PATCH') {
       const id = await verifyAuthToken(sql, getSessionToken(req)) || '';
