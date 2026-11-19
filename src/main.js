@@ -2281,13 +2281,16 @@ import { VehicleController } from './engine/VehicleController.js';
 
             renderer = new THREE.WebGLRenderer({
                 canvas: canvas,
-                antialias: true,
-                powerPreference: 'high-performance'
+                antialias: false,
+                powerPreference: 'high-performance',
+                stencil: false,
+                depth: true
             });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            // Large dynamic shadow maps were a major GPU cost across all seven tracks.
+            // Keep the lighting, but disable real-time shadow rendering for a steadier frame rate.
+            renderer.shadowMap.enabled = false;
 
             const hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x0f172a, 1.0);
             scene.add(hemiLight);
@@ -2328,9 +2331,15 @@ import { VehicleController } from './engine/VehicleController.js';
             previewCamera = new THREE.PerspectiveCamera(38, 2, 0.1, 100);
             previewCamera.position.set(6.5, 4.0, 7.5);
             previewCamera.lookAt(0, 0.7, 0);
-            previewRenderer = new THREE.WebGLRenderer({ canvas: previewCanvas, antialias: true, alpha: false });
-            previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-            previewRenderer.setSize(640, 260, false);
+            previewRenderer = new THREE.WebGLRenderer({
+                canvas: previewCanvas,
+                antialias: false,
+                alpha: false,
+                powerPreference: 'low-power',
+                stencil: false
+            });
+            previewRenderer.setPixelRatio(1);
+            previewRenderer.setSize(420, 210, false);
             previewScene.add(new THREE.HemisphereLight(0x9be7ff, 0x172033, 1.8));
             const previewKey = new THREE.DirectionalLight(0xffffff, 2.0); previewKey.position.set(5, 8, 6); previewScene.add(previewKey);
             const previewFill = new THREE.PointLight(0x00f0ff, 1.4, 20); previewFill.position.set(-5, 3, -3); previewScene.add(previewFill);
@@ -2564,21 +2573,54 @@ import { VehicleController } from './engine/VehicleController.js';
             }
         }
 
+        let bootStarted = false;
         async function bootGame() {
-            physicsWorld = await PhysicsWorld.create({ fixedTimeStep: PHYSICS_FIXED_STEP });
-            physicsWorld.createGround({ size: 3200, height: -0.36, friction: 1.1 });
-            initThree();
-            rebuildPhysicsTrack();
-            createPhysicsVehicle();
-            resetPlayerToStart();
-            renderLeaderboards();
-            await restoreSession();
-            refreshRecordsFromApi();
-            requestAnimationFrame(animate);
+            if (bootStarted) return;
+            bootStarted = true;
+
+            const startButton = document.getElementById('start-btn');
+            const authStatus = document.getElementById('auth-status');
+
+            try {
+                // Bring up the renderer before waiting for physics or network requests.
+                // A slow auth/records API must never leave the canvas black.
+                initThree();
+                requestAnimationFrame(animate);
+
+                physicsWorld = await PhysicsWorld.create({ fixedTimeStep: PHYSICS_FIXED_STEP });
+                physicsWorld.createGround({ size: 3200, height: -0.36, friction: 1.1 });
+                rebuildPhysicsTrack();
+                createPhysicsVehicle();
+                resetPlayerToStart();
+
+                // These are background tasks; neither one is allowed to block rendering.
+                void restoreSession();
+                void refreshRecordsFromApi();
+            } catch (error) {
+                console.error('[Cyber Drift] Falha ao inicializar a física:', error);
+                if (startButton) {
+                    startButton.disabled = true;
+                    startButton.classList.add('opacity-50');
+                }
+                if (authStatus) {
+                    authStatus.textContent = 'Falha ao iniciar a física do jogo. Atualize a página; se persistir, verifique o console.';
+                    authStatus.className = 'text-[11px] text-red-300 mt-2';
+                }
+                // If physics fails, keep the scene rendering so the user sees
+                // an actionable error instead of a permanently black screen.
+                if (!renderer) {
+                    try {
+                        initThree();
+                        requestAnimationFrame(animate);
+                    } catch (renderError) {
+                        console.error('[Cyber Drift] Falha ao iniciar o renderizador:', renderError);
+                    }
+                }
+            }
         }
 
         if (document.readyState === 'complete') {
-            bootGame();
+            void bootGame();
         } else {
-            window.addEventListener('load', bootGame, { once: true });
+            window.addEventListener('load', () => { void bootGame(); }, { once: true });
         }
