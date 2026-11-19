@@ -465,6 +465,9 @@ import { VFXSystem } from './engine/VFXSystem.js';
         let physicsVehicle = null;
         let physicsTrackColliders = [];
         let physicsAccumulator = 0;
+        let physicsReady = false;
+        let speedLinesActive = false;
+        let lastDriftHudUpdate = 0;
         const PHYSICS_FIXED_STEP = 1 / 120;
         const PROFILE_KEY = 'cyber_drift_profile_v1';
         const DEVICE_KEY = 'cyber_drift_device_id_v1';
@@ -999,6 +1002,13 @@ import { VFXSystem } from './engine/VFXSystem.js';
         let previewScene = null;
         let previewCamera = null;
         let previewRenderer = null;
+
+        function setSpeedLinesActive(active) {
+            if (speedLinesActive === active) return;
+            speedLinesActive = active;
+            const element = document.getElementById('speed-lines');
+            if (element) element.style.opacity = active ? '1' : '0';
+        }
 
         function clearInputKeys() {
             keys.w = false;
@@ -1832,7 +1842,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
 
             document.getElementById('s1-display').innerText = '--.--';
             document.getElementById('s2-display').innerText = '--.--';
-            document.getElementById('speed-lines').style.opacity = '0';
+            setSpeedLinesActive(false);
 
             if (physicsVehicle) {
                 physicsVehicle.reset(
@@ -1948,14 +1958,14 @@ import { VFXSystem } from './engine/VFXSystem.js';
                     player.nitroArmed = false;
                     showToast('ERS / NITRO SUPERAQUECIDO!');
                 }
-                document.getElementById('speed-lines').style.opacity = '1';
+                setSpeedLinesActive(true);
             } else {
                 if (player.nitroDelay > 0) player.nitroDelay = Math.max(0, player.nitroDelay - dt);
                 if (player.nitroLock <= 0 && player.nitroDelay <= 0) {
                     const rechargeRate = player.isDrifting ? 30 : 10;
                     player.nitro = Math.min(100, player.nitro + dt * rechargeRate);
                 }
-                document.getElementById('speed-lines').style.opacity = '0';
+                setSpeedLinesActive(false);
             }
 
             // Rapier owns the active vehicle dynamics. Inputs are collected at
@@ -2064,8 +2074,12 @@ import { VFXSystem } from './engine/VFXSystem.js';
                 driftChainSeconds = Math.max(0, driftChainSeconds - dt * 2);
                 driftCombo = Math.max(1, 1 + Math.floor(driftChainSeconds / 2) * 0.5);
             }
-            document.getElementById('drift-score-display').innerText = Math.floor(driftScore).toLocaleString('pt-BR');
-            document.getElementById('drift-combo-display').innerText = `x${driftCombo.toFixed(1)}`;
+            const driftHudNow = performance.now();
+            if (driftHudNow - lastDriftHudUpdate >= 50) {
+                document.getElementById('drift-score-display').innerText = Math.floor(driftScore).toLocaleString('pt-BR');
+                document.getElementById('drift-combo-display').innerText = `x${driftCombo.toFixed(1)}`;
+                lastDriftHudUpdate = driftHudNow;
+            }
 
 
 
@@ -2123,7 +2137,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
         function openSaveRecordModal(lapMs, isNewWR = false) {
             gameState = 'MODAL';
             sound.update(0, false, false);
-            document.getElementById('speed-lines').style.opacity = '0';
+            setSpeedLinesActive(false);
             clearInputKeys();
 
             player.pendingRecordTimeMs = lapMs;
@@ -2386,13 +2400,16 @@ import { VFXSystem } from './engine/VFXSystem.js';
             // Large dynamic shadow maps were a major GPU cost across all seven tracks.
             // Keep the lighting, but disable real-time shadow rendering for a steadier frame rate.
             renderer.shadowMap.enabled = false;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.08;
 
             const hemiLight = new THREE.HemisphereLight(0x38bdf8, 0x0f172a, 1.0);
             scene.add(hemiLight);
 
             const dirLight = new THREE.DirectionalLight(0xe0f2fe, 1.4);
             dirLight.position.set(160, 260, 120);
-            dirLight.castShadow = true;
+            dirLight.castShadow = false;
             dirLight.shadow.mapSize.width = 1024;
             dirLight.shadow.mapSize.height = 1024;
             dirLight.shadow.camera.near = 20;
@@ -2619,6 +2636,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
 
         function startTimeTrial() {
             if (!authToken) { showToast('ENTRE NA SUA CONTA ANTES DE JOGAR'); return; }
+            if (!physicsReady || !physicsVehicle) { showToast('AGUARDE A PISTA TERMINAR DE CARREGAR'); return; }
             sound.init();
             document.getElementById('menu-overlay').classList.add('hidden');
             document.getElementById('record-modal').classList.add('hidden');
@@ -2701,6 +2719,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
                 rebuildPhysicsTrack();
                 createPhysicsVehicle();
                 resetPlayerToStart();
+                physicsReady = true;
 
                 // These are background tasks; neither one is allowed to block rendering.
                 void restoreSession();
