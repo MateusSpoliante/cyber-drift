@@ -86,6 +86,8 @@ export class VehicleController {
         this.previousRotation = new THREE.Quaternion();
         this.currentRotation = new THREE.Quaternion();
         this.velocity = new THREE.Vector3();
+        this.forwardScratch = new THREE.Vector3(0, 0, 1);
+        this.planarVelocityScratch = new THREE.Vector3();
         this.speedKmh = 0;
         this.slipAngle = 0;
         this.isDrifting = false;
@@ -130,8 +132,8 @@ export class VehicleController {
         this.velocity.set(velocity.x, velocity.y, velocity.z);
         this.speedKmh = this.vehicle.currentVehicleSpeed() * 3.6;
 
-        const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.currentRotation);
-        const planarVelocity = this.velocity.clone().setY(0);
+        const forward = this.forwardScratch.set(0, 0, 1).applyQuaternion(this.currentRotation);
+        const planarVelocity = this.planarVelocityScratch.copy(this.velocity).setY(0);
         const velocityLength = planarVelocity.length();
         this.slipAngle = velocityLength > 0.5
             ? Math.atan2(forward.x * planarVelocity.z - forward.z * planarVelocity.x, forward.dot(planarVelocity))
