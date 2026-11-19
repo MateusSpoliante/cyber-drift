@@ -1304,6 +1304,7 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
             });
             const ground = new THREE.Mesh(groundGeo, groundMat);
             ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -0.25;
             ground.receiveShadow = true;
             trackWorld.add(ground);
 

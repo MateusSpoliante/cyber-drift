@@ -53,22 +53,22 @@ export function buildTrackGeometry({
         const curbLeft = sample.pt.clone().addScaledVector(sample.right, -outerCurb);
         const curbRight = sample.pt.clone().addScaledVector(sample.right, outerCurb);
 
-        roadPositions.push(left.x, sample.pt.y + 0.14, left.z, right.x, sample.pt.y + 0.14, right.z);
+        roadPositions.push(left.x, sample.pt.y + 0.058, left.z, right.x, sample.pt.y + 0.058, right.z);
         roadUvs.push(0, uvV, 1, uvV);
 
         gravelPositions.push(
-            gravelLeft.x, sample.pt.y + 0.06, gravelLeft.z,
-            left.x, sample.pt.y + 0.06, left.z,
-            right.x, sample.pt.y + 0.06, right.z,
-            gravelRight.x, sample.pt.y + 0.06, gravelRight.z
+            gravelLeft.x, sample.pt.y + 0.025, gravelLeft.z,
+            left.x, sample.pt.y + 0.025, left.z,
+            right.x, sample.pt.y + 0.025, right.z,
+            gravelRight.x, sample.pt.y + 0.025, gravelRight.z
         );
         gravelUvs.push(0, uvV, 0.42, uvV, 0.58, uvV, 1, uvV);
 
         curbPositions.push(
-            left.x, sample.pt.y + 0.22, left.z,
-            curbLeft.x, sample.pt.y + 0.22, curbLeft.z,
-            right.x, sample.pt.y + 0.22, right.z,
-            curbRight.x, sample.pt.y + 0.22, curbRight.z
+            left.x, sample.pt.y + 0.075, left.z,
+            curbLeft.x, sample.pt.y + 0.075, curbLeft.z,
+            right.x, sample.pt.y + 0.075, right.z,
+            curbRight.x, sample.pt.y + 0.075, curbRight.z
         );
 
         const stripeColor = curbPalette[Math.floor(i / 6) % 2];
