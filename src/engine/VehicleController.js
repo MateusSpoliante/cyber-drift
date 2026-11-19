@@ -87,6 +87,7 @@ export class VehicleController {
         this.currentRotation = new THREE.Quaternion();
         this.velocity = new THREE.Vector3();
         this.forwardScratch = new THREE.Vector3(0, 0, 1);
+        this.rotationScratch = new THREE.Quaternion();
         this.planarVelocityScratch = new THREE.Vector3();
         this.speedKmh = 0;
         this.slipAngle = 0;
@@ -105,21 +106,41 @@ export class VehicleController {
         this.previousPosition.copy(this.currentPosition);
         this.previousRotation.copy(this.currentRotation);
 
-        const speed = this.vehicle.currentVehicleSpeed();
-        const speedRatio = THREE.MathUtils.clamp(Math.abs(speed) / this.tuning.maxSpeed, 0, 1);
+        // Use the chassis velocity as the authoritative speed source. Rapier's
+        // vehicle speed can remain at zero when a wheel ray misses a mesh collider.
+        const rotation = this.body.rotation();
+        const forward = this.forwardScratch
+            .set(0, 0, 1)
+            .applyQuaternion(this.rotationScratch.set(rotation.x, rotation.y, rotation.z, rotation.w));
+        const velocity = this.body.linvel();
+        const forwardSpeed = velocity.x * forward.x + velocity.y * forward.y + velocity.z * forward.z;
+        const speedRatio = THREE.MathUtils.clamp(Math.abs(forwardSpeed) / this.tuning.maxSpeed, 0, 1);
         const steerAngle = this.input.steer * this.tuning.maxSteerAngle * (1 - speedRatio * 0.35);
-        const engineForce = (this.input.throttle - this.input.reverse * 0.62) * this.tuning.engineForce;
         const brakeForce = this.input.brake * this.tuning.brakeForce + this.input.handbrake * this.tuning.brakeForce * 1.8;
         const rearGrip = this.input.handbrake > 0.1 ? this.tuning.driftSideFriction : this.tuning.sideFriction;
 
         for (let i = 0; i < 4; i++) {
             this.vehicle.setWheelSteering(i, i < 2 ? steerAngle : 0);
-            this.vehicle.setWheelEngineForce(i, i >= 2 ? engineForce * 0.5 : 0);
+            // Steering and suspension remain on Rapier's vehicle controller.
+            // Propulsion is applied to the chassis below so a missed wheel ray
+            // cannot leave the car permanently unable to accelerate.
+            this.vehicle.setWheelEngineForce(i, 0);
             this.vehicle.setWheelBrake(i, brakeForce * (i >= 2 && this.input.handbrake > 0.1 ? 1.6 : 1));
             this.vehicle.setWheelSideFrictionStiffness(i, i >= 2 ? rearGrip : this.tuning.sideFriction);
         }
 
         this.vehicle.updateVehicle(dt, this.RAPIER.QueryFilterFlags?.EXCLUDE_DYNAMIC);
+
+        const drive = this.input.throttle > 0
+            ? (forwardSpeed < this.tuning.maxSpeed ? this.input.throttle * this.tuning.engineForce : 0)
+            : (forwardSpeed > -18 ? -this.input.reverse * this.tuning.engineForce * 0.62 : 0);
+        if (drive !== 0) {
+            this.body.addForce({ x: forward.x * drive, y: 0, z: forward.z * drive }, true);
+        }
+        if (brakeForce > 0 && Math.abs(forwardSpeed) > 0.15) {
+            const braking = brakeForce * Math.sign(forwardSpeed);
+            this.body.addForce({ x: -forward.x * braking, y: 0, z: -forward.z * braking }, true);
+        }
     }
 
     postStep() {
@@ -130,9 +151,8 @@ export class VehicleController {
 
         const velocity = this.body.linvel();
         this.velocity.set(velocity.x, velocity.y, velocity.z);
-        this.speedKmh = this.vehicle.currentVehicleSpeed() * 3.6;
-
         const forward = this.forwardScratch.set(0, 0, 1).applyQuaternion(this.currentRotation);
+        this.speedKmh = this.velocity.dot(forward) * 3.6;
         const planarVelocity = this.planarVelocityScratch.copy(this.velocity).setY(0);
         const velocityLength = planarVelocity.length();
         this.slipAngle = velocityLength > 0.5
