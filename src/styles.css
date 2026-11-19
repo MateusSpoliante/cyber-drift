@@ -292,7 +292,7 @@
     flex-flow: row nowrap !important;
     align-items: center;
     justify-content: space-between;
-    gap: 16px !important;
+    gap: 12px !important;
     width: 100%;
     min-width: 0;
 }
@@ -311,11 +311,12 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
+    white-space: nowrap;
 }
 .hud-speed-content .w-48 {
-    width: 192px !important;
-    min-width: 192px;
-    max-width: 192px;
+    width: 176px !important;
+    min-width: 176px;
+    max-width: 176px;
 }
 #nitro-text {
     display: inline-block;
