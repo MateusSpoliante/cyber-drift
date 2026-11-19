@@ -53,3 +53,22 @@ Esses itens exigem infraestrutura, assets e trabalho adicional; não devem ser c
 - Carro fantasma não aparece mais na pista (a telemetria continua sendo gravada e enviada ao banco).
 - Nitro: ao esvaziar, superaquece por 2,5 s (sem uso e sem recarga); depois exige 25% de carga e soltar/apertar a tecla para reacender. Há 0,9 s sem recarga após soltar o nitro, o que impede "pulsar" a tecla para recarregar. O HUD mostra superaquecimento, carregando e pronto.
 - Desempenho: pixel ratio limitado a 1,5 e sombras PCF simples.
+
+
+## Cyber Drift 3D — atualização de produto
+
+- Adicionado cadastro/login com senha derivada por `scrypt`, salt aleatório e token HMAC expirável.
+- Adicionado `AUTH_SECRET` e documentação de configuração.
+- Adicionados quatro circuitos com dificuldade, escala e cenários distintos.
+- Rankings, recordes e fantasmas agora consultam `track_id`.
+- Adicionado retorno direto da garagem de outro jogador para a garagem pessoal.
+- HUD simplificado, com menos telemetria concorrendo com a direção.
+- Cronômetro e amostragem do fantasma começam no primeiro comando de aceleração.
+- API de recordes exige sessão autenticada e associa a volta à conta do jogador.
+- Incluída migração SQL independente para banco existente.
+
+- Configuração de `scrypt` ajustada para N=2^14, r=8, p=5, seguindo uma das configurações alternativas indicadas pela OWASP para equilibrar custo de memória e CPU.
+- Sessão migrada para cookie `HttpOnly`/`SameSite=Lax` (e `Secure` em produção), evitando expor o token ao JavaScript e removendo o token legado do `localStorage`.
+- Recorde pessoal exibido na garagem agora acompanha o circuito selecionado; o melhor tempo de uma pista não é comparado com tempos de outra.
+- Cenários ampliados: formações rochosas/dunas no deserto, montanhas nevadas nos Alpes e contêineres no porto.
+- Recursos WebGL antigos são descartados ao trocar de circuito, com deduplicação de geometrias, materiais e texturas compartilhados.

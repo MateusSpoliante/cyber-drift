@@ -1,7 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- Perfis pseudônimos: não há conta, senha ou e-mail.
--- device_id é um identificador aleatório persistido no navegador do jogador.
+-- Perfis de jogadores. device_id permanece como identificador técnico legado; contas autenticadas usam username/password_hash adicionados na migração ao final.
 CREATE TABLE IF NOT EXISTS players (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   device_id UUID NOT NULL UNIQUE,
@@ -57,3 +56,22 @@ WHERE r.id = d.id AND d.position > 1;
 CREATE UNIQUE INDEX IF NOT EXISTS records_one_best_per_player_uidx
   ON records (player_id)
   WHERE player_id IS NOT NULL;
+
+
+-- Cyber Drift 3D: contas autenticadas e recordes independentes por pista.
+ALTER TABLE players ALTER COLUMN display_name TYPE VARCHAR(16);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS username VARCHAR(16);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS password_hash TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS players_username_lower_uidx
+  ON players (lower(username)) WHERE username IS NOT NULL;
+COMMENT ON COLUMN players.password_hash IS 'Hash scrypt com salt aleatório; nunca armazenar senha em texto puro.';
+
+ALTER TABLE records ADD COLUMN IF NOT EXISTS track_id VARCHAR(32) NOT NULL DEFAULT 'neon-city';
+ALTER TABLE records DROP CONSTRAINT IF EXISTS records_player_id_key;
+DROP INDEX IF EXISTS records_one_best_per_player_uidx;
+CREATE UNIQUE INDEX IF NOT EXISTS records_one_best_per_player_track_uidx
+  ON records (player_id, track_id);
+CREATE INDEX IF NOT EXISTS records_track_time_idx ON records (track_id, time_ms ASC, created_at ASC);
+
+-- Perfis antigos permanecem preservados. Para continuar usando um perfil antigo,
+-- crie uma conta nova; os registros anteriores continuam no ranking da pista Neon City.
