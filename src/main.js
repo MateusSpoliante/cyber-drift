@@ -1,7 +1,7 @@
 import './styles.css';
 import * as THREE from 'three';
 import { buildTrackGeometry } from './game/track/trackGeometry.js';
-import { createSportsCarMesh, updateCarVisuals } from './game/Car.js';
+import { createSportsCarMesh } from './game/Car.js';
 import { CameraController } from './game/CameraController.js';
 import { createTrackCenterline } from './game/Track.js';
 import { PhysicsWorld } from './engine/PhysicsWorld.js';
@@ -685,10 +685,10 @@ import { VehicleController } from './engine/VehicleController.js';
             }
             throw lastError || new Error('Falha ao salvar no banco.');
         }
-        async function saveNewRecord(pilotName, timeMs, ghostData) {
+        async function saveNewRecord(pilotName, timeMs) {
             const cleanName = (pilotName || '').trim().toUpperCase().replace(/[^A-Z0-9_ -]/g,'').slice(0,16);
             if (!cleanName) throw new Error('Digite um apelido válido.');
-            const record = {name:cleanName,timeMs:Math.round(timeMs),trackId:selectedTrackId,clientRecordId:makeId(),ghost:ghostData || []};
+            const record = {name:cleanName,timeMs:Math.round(timeMs),trackId:selectedTrackId,clientRecordId:makeId()};
             try {
                 const data = await postRecordToDb(record);
                 apiAvailable = true; lastSaveSynced = true;
@@ -1831,8 +1831,6 @@ import { VehicleController } from './engine/VehicleController.js';
         }
 
         function updatePlayerPhysics(dt) {
-            const trackConfig = TRACKS[selectedTrackId] || TRACKS['neon-city'];
-
             if (!timerStarted && keys.w) {
                 timerStarted = true;
                 player.lapStartTime = performance.now();
@@ -2005,8 +2003,6 @@ import { VehicleController } from './engine/VehicleController.js';
         function onPlayerCompleteLap() {
             const now = performance.now();
             const lapMs = now - player.lapStartTime;
-            const completedGhost = [];
-            player.lastCompletedGhost = [];
 
             player.lapStartTime = now;
             player.sector1Done = false;
@@ -2020,7 +2016,6 @@ import { VehicleController } from './engine/VehicleController.js';
             const isSessionBest = !player.bestLapMs || lapMs < player.bestLapMs;
             if (isSessionBest) {
                 player.bestLapMs = lapMs;
-                player.bestLapGhost = completedGhost;
                 document.getElementById('best-display').innerText = formatTime(lapMs);
             }
 
@@ -2473,7 +2468,6 @@ import { VehicleController } from './engine/VehicleController.js';
                     showToast('COMPLETE UMA VOLTA PRIMEIRO PARA SALVAR!');
                     return;
                 }
-                player.lastCompletedGhost = [];
                 openSaveRecordModal(player.bestLapMs, false);
             });
 
@@ -2486,7 +2480,7 @@ import { VehicleController } from './engine/VehicleController.js';
                 saveButton.textContent = 'SALVANDO...';
                 saveButton.classList.add('opacity-60', 'cursor-not-allowed');
                 try {
-                    const rank = await saveNewRecord(nameVal, player.pendingRecordTimeMs, player.lastCompletedGhost || []);
+                    const rank = await saveNewRecord(nameVal, player.pendingRecordTimeMs);
                     recordSavedForPending = true;
                     saveStatus.textContent = lastSaveSynced
                         ? '✓ RECORDE SALVO.'
