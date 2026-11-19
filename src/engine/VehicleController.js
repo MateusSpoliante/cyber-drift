@@ -13,7 +13,7 @@ const DEFAULT_TUNING = {
     brakeForce: 190,
     maxSteerAngle: 0.42,
     suspensionRestLength: 0.34,
-    wheelRadius: 0.36,
+    wheelRadius: 0.49,
     suspensionStiffness: 28,
     suspensionCompression: 4.4,
     suspensionRelaxation: 5.2,
