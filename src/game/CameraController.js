@@ -38,8 +38,11 @@ export class CameraController {
         const baseFov = cameraMode === 2 ? 74 : 62;
         const speedNorm = Math.abs(player.speed) / maxSpeed;
         const targetFov = baseFov + speedNorm * 18 + (player.isNitro ? 11 : 0);
-        this.camera.fov += (targetFov - this.camera.fov) * (1 - Math.exp(-8.5 * dt));
-        this.camera.updateProjectionMatrix();
+        const nextFov = this.camera.fov + (targetFov - this.camera.fov) * (1 - Math.exp(-8.5 * dt));
+        if (Math.abs(nextFov - this.camera.fov) > 0.035) {
+            this.camera.fov = nextFov;
+            this.camera.updateProjectionMatrix();
+        }
 
         if (cameraShake > 0) {
             this.camera.position.x += (Math.random() - 0.5) * cameraShake;
