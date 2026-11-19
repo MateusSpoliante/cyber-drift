@@ -1065,11 +1065,6 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
             ctx.fillRect(14, 0, 9, 512);
             ctx.fillRect(489, 0, 9, 512);
 
-            // Center dashed racing guide
-            ctx.fillStyle = theme === 'monaco' ? 'rgba(245, 158, 11, 0.55)' : 'rgba(0, 240, 255, 0.45)';
-            ctx.fillRect(253, 28, 6, 175);
-            ctx.fillRect(253, 284, 6, 175);
-
             const tex = new THREE.CanvasTexture(canvas);
             tex.wrapS = THREE.RepeatWrapping;
             tex.wrapT = THREE.RepeatWrapping;
@@ -1367,20 +1362,19 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
                     ? averageStep / (2 * Math.sin(turnAngle * 0.5))
                     : Infinity;
 
-                const miter = prev.baseRight.clone().add(following.baseRight);
-                if (miter.lengthSq() < 1e-5) {
-                    current.right.copy(current.baseRight);
-                } else {
-                    miter.normalize();
-                    const alignment = Math.max(0.90, Math.abs(miter.dot(current.baseRight)));
-                    const miterLimit = Math.min(1.12, 1 / alignment);
-                    current.right.copy(miter);
-
-                    // Keep the inside edge away from the curve's center of rotation.
-                    const safeHalfWidth = Math.max(1.2, radius - 2.0);
-                    const curvatureLimit = safeHalfWidth / ROAD_HALF_WIDTH;
-                    current.miterScale = Math.min(miterLimit, curvatureLimit, current.clearanceScale ?? 1);
-                }
+                // A tangent-normal ribbon avoids long miter spikes entirely.
+                // Both edges remain centered and only narrow when curvature or
+                // neighbouring track sections require additional clearance.
+                current.right.copy(current.baseRight);
+                const safeHalfWidth = Math.max(1.5, radius - 2.5);
+                const curvatureLimit = Number.isFinite(radius)
+                    ? Math.min(1, safeHalfWidth / ROAD_HALF_WIDTH)
+                    : 1;
+                current.miterScale = Math.min(
+                    1,
+                    curvatureLimit,
+                    current.clearanceScale ?? 1
+                );
             }
 
             let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -1528,9 +1522,10 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
                 const s = trackSamples[i];
                 const angle = Math.atan2(s.tangent.x, s.tangent.z);
                 const side = (i % 40 === 0) ? 1 : -1;
-                const lampPos = s.pt.clone().addScaledVector(s.right, side * (WALL_OFFSET + 2.5));
+                const lampPos = s.pt.clone().addScaledVector(s.right, side * (WALL_OFFSET + 9));
 
-                if (!isPointFarFromTrack(lampPos.x, lampPos.z, WALL_OFFSET + 1.5)) continue;
+                // Include the pole, arm and lamp head footprint in the clearance.
+                if (!isPointFarFromTrack(lampPos.x, lampPos.z, WALL_OFFSET + 6)) continue;
 
                 const lampGroup = new THREE.Group();
                 lampGroup.position.set(lampPos.x, 0, lampPos.z);
@@ -1557,8 +1552,9 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
             const roofStandMat = new THREE.MeshStandardMaterial({ color: 0xFF6500, metalness: 0.5, roughness: 0.3 });
             for (let i = 15; i <= 75; i += 20) {
                 const s = trackSamples[i];
-                const standPos = s.pt.clone().addScaledVector(s.right, -(WALL_OFFSET + 14));
-                if (!isPointFarFromTrack(standPos.x, standPos.z, WALL_OFFSET + 9)) continue;
+                const standFootprintRadius = 18;
+                const standPos = s.pt.clone().addScaledVector(s.right, -(WALL_OFFSET + 31));
+                if (!isPointFarFromTrack(standPos.x, standPos.z, WALL_OFFSET + standFootprintRadius + 6)) continue;
                 const angle = Math.atan2(s.tangent.x, s.tangent.z);
 
                 const stand = new THREE.Group();
@@ -1637,7 +1633,8 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
                 for (let i = 0; i < 48; i++) {
                     const rx = (Math.random() - 0.5) * 1400;
                     const rz = (Math.random() - 0.5) * 1150;
-                    if (!isPointFarFromTrack(rx, rz, WALL_OFFSET + 25)) continue;
+                    const containerFootprintRadius = 15;
+                    if (!isPointFarFromTrack(rx, rz, WALL_OFFSET + containerFootprintRadius + 8)) continue;
                     const container = new THREE.Mesh(containerGeo, containerMaterials[i % containerMaterials.length]);
                     container.position.set(rx, 4 + (i % 4 === 0 ? 8 : 0), rz);
                     container.rotation.y = Math.round(Math.random()) * Math.PI / 2;
@@ -1659,9 +1656,10 @@ import { buildTrackGeometry } from './game/track/trackGeometry.js';
                 for (let i = 0; i < 72; i++) {
                     const rx = (Math.random() - 0.5) * 1750;
                     const rz = (Math.random() - 0.5) * 1550;
-                    if (!isPointFarFromTrack(rx, rz, WALL_OFFSET + 65)) continue;
                     const radius = theme === 'airfield' ? (22 + Math.random() * 35) : (32 + Math.random() * 68);
                     const height = theme === 'airfield' ? (14 + Math.random() * 24) : (45 + Math.random() * 130);
+                    // The mountain's full base radius is included in the safety margin.
+                    if (!isPointFarFromTrack(rx, rz, WALL_OFFSET + radius + 18)) continue;
                     const mountain = new THREE.Mesh(new THREE.ConeGeometry(radius, height, 7), mountainMat);
                     mountain.position.set(rx, height / 2 - 1, rz);
                     mountain.rotation.y = Math.random() * Math.PI;

@@ -20,9 +20,9 @@
     <div id="hud-layer" class="fixed inset-0 z-10 pointer-events-none">
 
         <!-- Top-Left: F1 Telemetry Timing Tower -->
-        <div class="fixed top-4 left-4 flex flex-col space-y-2.5">
+        <div id="hud-top-left" class="fixed top-4 left-4 flex flex-col space-y-2.5 hud-top-left">
             <!-- Track Badge + Lap Timing -->
-            <div class="cyber-panel px-5 py-3.5 rounded-2xl border-l-4 border-l-[#FF6500]">
+            <div class="cyber-panel px-5 py-3.5 rounded-2xl border-l-4 border-l-[#FF6500] hud-main-timing-panel">
                 <div class="flex items-center justify-between gap-4 border-b border-slate-700/70 pb-2 mb-2.5">
                     <div class="flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full bg-[#FF6500] animate-pulse"></span>
@@ -72,7 +72,7 @@
         </div>
 
         <!-- Top-Right: Quick Actions (Pause / Exit to Menu) + Keybind Strip -->
-        <div class="fixed top-4 right-4 flex flex-col items-end space-y-2.5">
+        <div id="hud-top-right" class="fixed top-4 right-4 flex flex-col items-end space-y-2.5 hud-top-right">
             <div class="flex items-center gap-2 pointer-events-auto">
                 <button id="hud-restart-btn" title="Reiniciar Volta (TAB)" class="cyber-panel hover:border-cyan-400 px-3.5 py-2.5 rounded-xl text-xs font-orbitron font-bold text-cyan-300 hover:text-white tracking-wider transition cursor-pointer flex items-center gap-1.5">
                     <span>↺</span>
@@ -115,8 +115,8 @@
         </div>
 
         <!-- Bottom-Left: F1 Digital Telemetry Cluster (Speed, Gear, RPM Bar & Nitro Gauge) -->
-        <div class="fixed bottom-5 left-5 flex items-end space-x-3">
-            <div class="cyber-panel px-6 py-4 rounded-2xl border border-cyan-500/40 shadow-2xl">
+        <div id="hud-bottom-left" class="fixed bottom-5 left-5 flex items-end space-x-3 hud-bottom-left">
+            <div class="cyber-panel px-6 py-4 rounded-2xl border border-cyan-500/40 shadow-2xl hud-speed-panel">
                 <!-- RPM Shift Light Bar -->
                 <div id="rpm-lights" class="grid grid-cols-10 gap-1.5 mb-3">
                     <div class="h-1.5 rounded-full bg-slate-800 transition-colors"></div>
@@ -131,7 +131,7 @@
                     <div class="h-1.5 rounded-full bg-slate-800 transition-colors"></div>
                 </div>
 
-                <div class="flex items-center space-x-5">
+                <div class="flex items-center space-x-5 hud-speed-content">
                     <!-- Speed -->
                     <div class="min-w-[118px]">
                         <div class="text-[10px] text-cyan-300 font-orbitron font-bold tracking-widest">VELOCIDADE</div>
