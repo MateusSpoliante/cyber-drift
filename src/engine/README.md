@@ -1,11 +1,14 @@
 # Next-Gen Engine — Cyber Drift
 
-Esta pasta contém a nova base técnica do jogo. Ela ainda não substitui o loop legado: a migração será feita depois de validar a física e a pista separadamente, para não perder garagem, recordes, ghosts e backend.
+Esta pasta contém a nova base técnica do jogo. Ela ainda não substitui o loop legado: a migração será feita depois de validar a física e a pista separadamente, para preservar garagem, recordes, ghosts e backend.
 
-## Inicialização
+## Exemplo de inicialização dos módulos
+
+O exemplo abaixo demonstra a ligação entre os módulos. Ele é um ponto de partida de integração, não substitui a migração do `main.js` atual.
 
 ```js
 import * as THREE from 'three';
+import { createSportsCarMesh } from '../game/Car.js';
 import {
     PhysicsWorld,
     VehicleController,
@@ -14,20 +17,23 @@ import {
     AudioSynth,
     VFXSystem,
     RenderPipeline,
-    EnvironmentBuilder
+    EnvironmentBuilder,
+    CameraRig,
+    LightingRig
 } from './engine/index.js';
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 2000);
-const renderer = new THREE.WebGLRenderer({ antialias: false });
+camera.position.set(0, 9, -18);
+
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
 document.body.appendChild(renderer.domElement);
 
 const lighting = new LightingRig(scene, renderer);
 const cameraRig = new CameraRig(camera);
+const environment = new EnvironmentBuilder(renderer);
+scene.environment = environment.create();
 
 const physics = await PhysicsWorld.create({ fixedTimeStep: 1 / 120 });
 physics.createGround();
@@ -38,16 +44,43 @@ trackBuilder.build([
     [55, 0, 42], [0, 0, 65], [-55, 0, 40], [-68, 0, 0]
 ]);
 
+const carAsset = createSportsCarMesh();
+scene.add(carAsset.mesh);
+
 const vehicle = new VehicleController({
     physics,
-    spawn: { x: -60, y: 1.2, z: -20 }
+    spawn: { x: -60, y: 1.2, z: -20 },
+    visual: carAsset.mesh
 });
 
-const environment = new EnvironmentBuilder(renderer);
-scene.environment = environment.create();
 const post = new RenderPipeline(renderer, scene, camera);
 const audio = new AudioSynth();
 const vfx = new VFXSystem(scene);
+const keys = new Set();
+
+function updateInput() {
+    vehicle.setInput({
+        throttle: keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0,
+        brake: keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0,
+        steer: (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0)
+            - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0),
+        handbrake: keys.has('Space') ? 1 : 0
+    });
+}
+
+window.addEventListener('keydown', event => {
+    keys.add(event.code);
+    updateInput();
+    audio.start();
+});
+window.addEventListener('keyup', event => {
+    keys.delete(event.code);
+    updateInput();
+});
+window.addEventListener('blur', () => {
+    keys.clear();
+    updateInput();
+});
 
 const engine = new Engine({
     fixedTimeStep: 1 / 120,
@@ -58,6 +91,8 @@ const engine = new Engine({
     },
     onRender(dt, alpha) {
         vehicle.syncVisual(alpha);
+        cameraRig.update(carAsset.mesh, vehicle.speedKmh, dt);
+        lighting.follow(carAsset.mesh);
         audio.update({
             speed: vehicle.speedKmh,
             throttle: vehicle.input.throttle,
@@ -69,41 +104,28 @@ const engine = new Engine({
     }
 });
 
-window.addEventListener('keydown', event => {
-    if (event.code === 'KeyW') vehicle.setInput({ ...vehicle.input, throttle: 1 });
-    if (event.code === 'KeyA') vehicle.setInput({ ...vehicle.input, steer: -1 });
-    if (event.code === 'KeyD') vehicle.setInput({ ...vehicle.input, steer: 1 });
-    if (event.code === 'Space') vehicle.setInput({ ...vehicle.input, handbrake: 1 });
-});
-window.addEventListener('keyup', event => {
-    if (['KeyW', 'KeyA', 'KeyD', 'Space'].includes(event.code)) {
-        vehicle.setInput({ throttle: 0, brake: 0, steer: 0, handbrake: 0 });
-    }
-});
-window.addEventListener('pointerdown', () => audio.start(), { once: true });
 engine.start();
 ```
 
 ## Módulos
 
 - `PhysicsWorld`: inicialização WASM, gravidade e timestep.
-- `VehicleController`: rigid body do chassi, quatro rodas raycast, suspensão e controles.
-- `TrackBuilder`: spline 3D, elevação, banking, malha de asfalto e colisores.
+- `VehicleController`: rigid body do chassi, quatro rodas raycast, suspensão, tração e frenagem.
+- `TrackBuilder`: spline 3D, elevação, banking, asfalto, zebras e colisores de barreira.
 - `Engine`: acumulador de timestep fixo e interpolação visual.
-- `AudioSynth`: motor e pneus sintetizados em tempo real.
-- `VFXSystem`: fumaça em InstancedMesh e buffer de skidmarks.
+- `AudioSynth`: motor e chiado dos pneus sintetizados via Web Audio API.
+- `VFXSystem`: fumaça e faíscas em InstancedMesh, além do buffer de skidmarks.
 - `RenderPipeline`: RenderPass, Bloom e SMAA.
-- `EnvironmentBuilder`: mapa de ambiente via PMREM.
-- `UIManager`: atualização de elementos HUD por data-attributes.
+- `EnvironmentBuilder`: environment map procedural de golden hour convertido em PMREM.
+- `CameraRig` e `LightingRig`: câmera spring-arm, FOV dinâmico e iluminação com sombras.
+- `UIManager`: atualização desacoplada do HUD por data-attributes.
 
-## Dependências
+## Dependências e integração
 
-`three` e `@dimforge/rapier3d-compat` são instalados pelo npm. Os addons do Three.js são importados de `three/addons`; não use cópias separadas de versões diferentes do Three.
-
-## Notas de integração
-
+- `three` e `@dimforge/rapier3d-compat` são instalados pelo npm.
+- Os addons do Three.js são importados de `three/addons/...`; mantenha todos na mesma versão do pacote principal.
 - Rapier usa metros e segundos; mantenha a escala física consistente ao migrar as pistas antigas.
 - O controlador nativo chama-se `DynamicRayCastVehicleController` e é criado por `world.createVehicleController(chassis)`.
-- A chamada `vehicle.preStep(dt)` deve ocorrer antes de `physics.step(dt)`; `vehicle.postStep()` deve ocorrer logo depois.
-- O áudio só inicia depois de uma interação do usuário, conforme as políticas de autoplay dos navegadores.
-- Esta base ainda precisa ser ligada ao carro visual, câmera, HUD e estados de corrida do jogo principal. Não remova os sistemas antigos antes dessa validação.
+- Chame `vehicle.preStep(dt)` antes de `physics.step(dt)` e `vehicle.postStep()` logo depois.
+- O áudio só inicia após interação do usuário, conforme as políticas de autoplay dos navegadores.
+- Não remova os sistemas antigos antes de validar colisões, direção, voltas, garagem e persistência no jogo integrado.
