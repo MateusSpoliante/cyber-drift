@@ -20,6 +20,7 @@ export class VFXSystem {
         });
         this.smoke = new THREE.InstancedMesh(smokeGeometry, smokeMaterial, smokeCount);
         this.smoke.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.smoke.frustumCulled = false;
         this.smoke.count = smokeCount;
         this.scene.add(this.smoke);
 
@@ -59,6 +60,7 @@ export class VFXSystem {
         const sparkMaterial = new THREE.MeshBasicMaterial({ color: 0xffa24a, toneMapped: false });
         this.sparks = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 5, 5), sparkMaterial, sparkCount);
         this.sparks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.sparks.frustumCulled = false;
         for (let i = 0; i < sparkCount; i++) {
             this.dummy.position.set(0, -10000, 0);
             this.dummy.scale.setScalar(0.001);
