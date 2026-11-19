@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 
 const WHEEL_LAYOUT = [
-    { x: -0.82, y: -0.12, z:  1.28, front: true },
-    { x:  0.82, y: -0.12, z:  1.28, front: true },
-    { x: -0.82, y: -0.12, z: -1.28, front: false },
-    { x:  0.82, y: -0.12, z: -1.28, front: false }
+    { x: -1.35, y: 0.63, z:  1.48, front: true },
+    { x:  1.35, y: 0.63, z:  1.48, front: true },
+    { x: -1.38, y: 0.63, z: -1.72, front: false },
+    { x:  1.38, y: 0.63, z: -1.72, front: false }
 ];
 
 const DEFAULT_TUNING = {
@@ -34,6 +34,7 @@ export class VehicleController {
         this.RAPIER = physics.RAPIER;
         this.tuning = { ...DEFAULT_TUNING, ...tuning };
         this.visual = visual;
+        this.visualOffset = new THREE.Vector3(0, -0.56, 0);
         this.input = { throttle: 0, brake: 0, steer: 0, handbrake: 0 };
 
         const { x, y, z } = spawn;
@@ -131,8 +132,20 @@ export class VehicleController {
 
     syncVisual(alpha = 1) {
         if (!this.visual) return;
-        this.visual.position.lerpVectors(this.previousPosition, this.currentPosition, alpha);
-        this.visual.quaternion.copy(this.previousRotation).slerp(this.currentRotation, alpha);
+        const root = this.visual.mesh ?? this.visual;
+        root.position.lerpVectors(this.previousPosition, this.currentPosition, alpha).add(this.visualOffset);
+        root.quaternion.copy(this.previousRotation).slerp(this.currentRotation, alpha);
+
+        if (this.visual.steerPivots) {
+            this.visual.steerPivots.forEach((pivot, index) => {
+                pivot.rotation.y = this.vehicle.wheelSteering(index) ?? 0;
+            });
+        }
+        if (this.visual.spinMeshes) {
+            this.visual.spinMeshes.forEach((wheel, index) => {
+                wheel.rotation.x = this.vehicle.wheelRotation(index) ?? 0;
+            });
+        }
     }
 
     getWheelState(index) {
