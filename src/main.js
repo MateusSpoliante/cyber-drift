@@ -6,6 +6,7 @@ import { CameraController } from './game/CameraController.js';
 import { createTrackCenterline } from './game/Track.js';
 import { PhysicsWorld } from './engine/PhysicsWorld.js';
 import { VehicleController } from './engine/VehicleController.js';
+import { VEHICLE_GEOMETRY } from './engine/arcadeVehicleMath.js';
 import { VFXSystem } from './engine/VFXSystem.js';
 // ==========================================
         // 1. F1-INSPIRED CIRCUITS & TRACK CONFIGS
@@ -1457,7 +1458,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
             const heading = Math.atan2(start.tangent.x, start.tangent.z);
             physicsVehicle = new VehicleController({
                 physics: physicsWorld,
-                spawn: { x: start.pt.x, y: start.pt.y + 0.56, z: start.pt.z, heading },
+                spawn: { x: start.pt.x, y: start.pt.y + VEHICLE_GEOMETRY.spawnOffsetY, z: start.pt.z, heading },
                 visual: playerCar
             });
             physicsAccumulator = 0;
@@ -1860,7 +1861,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
 
             if (physicsVehicle) {
                 physicsVehicle.reset(
-                    { x: s.pt.x, y: s.pt.y + 0.56, z: s.pt.z },
+                    { x: s.pt.x, y: s.pt.y + VEHICLE_GEOMETRY.spawnOffsetY, z: s.pt.z },
                     player.heading
                 );
                 physicsVehicle.syncVisual(1);
@@ -1878,7 +1879,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
             player.speed = 0;
             if (physicsVehicle) {
                 physicsVehicle.reset(
-                    { x: nearest.pt.x, y: nearest.pt.y + 0.56, z: nearest.pt.z },
+                    { x: nearest.pt.x, y: nearest.pt.y + VEHICLE_GEOMETRY.spawnOffsetY, z: nearest.pt.z },
                     player.heading
                 );
                 physicsVehicle.syncVisual(1);
