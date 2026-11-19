@@ -1558,35 +1558,56 @@ import { VFXSystem } from './engine/VFXSystem.js';
             const poleMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 });
             const lampBulbMat = new THREE.MeshBasicMaterial({ color: trackConfig.railColor });
 
-            // Trackside Floodlights
+            // Batch all trackside lamps into three static instance buffers.
+            const postGeo = new THREE.CylinderGeometry(0.22, 0.34, 10, 8);
+            const armGeo = new THREE.BoxGeometry(3.4, 0.22, 0.25);
+            const bulbGeo = new THREE.BoxGeometry(1.2, 0.2, 0.45);
+            const postMatrices = [], armMatrices = [], bulbMatrices = [];
+            const lampTransform = new THREE.Object3D();
+            const childTransform = new THREE.Object3D();
+            const worldMatrix = new THREE.Matrix4();
+
             for (let i = 0; i < TRACK_SAMPLES_COUNT; i += 20) {
                 const s = trackSamples[i];
                 const angle = Math.atan2(s.tangent.x, s.tangent.z);
                 const side = (i % 40 === 0) ? 1 : -1;
                 const lampPos = s.pt.clone().addScaledVector(s.right, side * (WALL_OFFSET + 9));
-
-                // Include the pole, arm and lamp head footprint in the clearance.
                 if (!isPointFarFromTrack(lampPos.x, lampPos.z, WALL_OFFSET + 6)) continue;
 
-                const lampGroup = new THREE.Group();
-                lampGroup.position.set(lampPos.x, 0, lampPos.z);
-                lampGroup.rotation.y = angle;
+                lampTransform.position.set(lampPos.x, 0, lampPos.z);
+                lampTransform.rotation.set(0, angle, 0);
+                lampTransform.scale.set(1, 1, 1);
+                lampTransform.updateMatrix();
 
-                const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 10, 8), poleMat);
-                post.position.y = 5;
-                post.castShadow = true;
-                lampGroup.add(post);
+                childTransform.position.set(0, 5, 0);
+                childTransform.rotation.set(0, 0, 0);
+                childTransform.scale.set(1, 1, 1);
+                childTransform.updateMatrix();
+                worldMatrix.multiplyMatrices(lampTransform.matrix, childTransform.matrix);
+                postMatrices.push(worldMatrix.clone());
 
-                const arm = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.22, 0.25), poleMat);
-                arm.position.set(-side * 1.5, 9.9, 0);
-                lampGroup.add(arm);
+                childTransform.position.set(-side * 1.5, 9.9, 0);
+                childTransform.updateMatrix();
+                worldMatrix.multiplyMatrices(lampTransform.matrix, childTransform.matrix);
+                armMatrices.push(worldMatrix.clone());
 
-                const bulb = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 0.45), lampBulbMat);
-                bulb.position.set(-side * 2.6, 9.75, 0);
-                lampGroup.add(bulb);
-
-                trackWorld.add(lampGroup);
+                childTransform.position.set(-side * 2.6, 9.75, 0);
+                childTransform.updateMatrix();
+                worldMatrix.multiplyMatrices(lampTransform.matrix, childTransform.matrix);
+                bulbMatrices.push(worldMatrix.clone());
             }
+
+            const addStaticInstances = (geometry, material, matrices) => {
+                if (!matrices.length) return;
+                const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
+                matrices.forEach((matrix, index) => mesh.setMatrixAt(index, matrix));
+                mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+                mesh.instanceMatrix.needsUpdate = true;
+                trackWorld.add(mesh);
+            };
+            addStaticInstances(postGeo, poleMat, postMatrices);
+            addStaticInstances(armGeo, poleMat, armMatrices);
+            addStaticInstances(bulbGeo, lampBulbMat, bulbMatrices);
 
             // F1 Grandstands along main straight
             const standMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6, roughness: 0.4 });
