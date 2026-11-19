@@ -1,13 +1,10 @@
 import * as THREE from 'three';
 
 const WHEEL_LAYOUT = [
-    // The wheel mounting point must sit one wheel radius plus the resting
-    // suspension length above the road. With a 0.56 m chassis spawn height,
-    // y=0.35 puts the virtual wheel center at the same height as the 3D tyres.
-    { x: -1.35, y:  0.35, z:  1.48, front: true },
-    { x:  1.35, y:  0.35, z:  1.48, front: true },
-    { x: -1.38, y:  0.35, z: -1.72, front: false },
-    { x:  1.38, y:  0.35, z: -1.72, front: false }
+    { x: -1.35, y: -0.22, z:  1.48, front: true },
+    { x:  1.35, y: -0.22, z:  1.48, front: true },
+    { x: -1.38, y: -0.22, z: -1.72, front: false },
+    { x:  1.38, y: -0.22, z: -1.72, front: false }
 ];
 
 const DEFAULT_TUNING = {
@@ -109,6 +106,8 @@ export class VehicleController {
         this.previousPosition.copy(this.currentPosition);
         this.previousRotation.copy(this.currentRotation);
 
+        // Use the chassis velocity as the authoritative speed source. Rapier's
+        // vehicle speed can remain at zero when a wheel ray misses a mesh collider.
         const rotation = this.body.rotation();
         const forward = this.forwardScratch
             .set(0, 0, 1)
@@ -117,38 +116,31 @@ export class VehicleController {
         const forwardSpeed = velocity.x * forward.x + velocity.y * forward.y + velocity.z * forward.z;
         const speedRatio = THREE.MathUtils.clamp(Math.abs(forwardSpeed) / this.tuning.maxSpeed, 0, 1);
         const steerAngle = this.input.steer * this.tuning.maxSteerAngle * (1 - speedRatio * 0.35);
-
-        const driveForce = this.input.throttle > 0
-            ? (forwardSpeed < this.tuning.maxSpeed ? this.input.throttle * this.tuning.engineForce : 0)
-            : (forwardSpeed > -18 ? -this.input.reverse * this.tuning.engineForce * 0.62 : 0);
-        const brakeForce = this.input.brake * this.tuning.brakeForce;
-        const handbrakeForce = this.input.handbrake * this.tuning.brakeForce * 1.8;
-        const rearGrip = this.input.handbrake > 0.1
-            ? this.tuning.driftSideFriction
-            : this.tuning.sideFriction;
+        const brakeForce = this.input.brake * this.tuning.brakeForce + this.input.handbrake * this.tuning.brakeForce * 1.8;
+        const rearGrip = this.input.handbrake > 0.1 ? this.tuning.driftSideFriction : this.tuning.sideFriction;
 
         for (let i = 0; i < 4; i++) {
-            const isRearWheel = i >= 2;
-            this.vehicle.setWheelSteering(i, isRearWheel ? 0 : steerAngle);
-            // Rapier expects wheel engine force, brake force and steering to be
-            // configured before updateVehicle() performs its raycasts/forces.
-            this.vehicle.setWheelEngineForce(i, isRearWheel ? driveForce * 0.5 : 0);
-            this.vehicle.setWheelBrake(
-                i,
-                brakeForce + (isRearWheel ? handbrakeForce : 0)
-            );
-            this.vehicle.setWheelSideFrictionStiffness(
-                i,
-                isRearWheel ? rearGrip : this.tuning.sideFriction
-            );
+            this.vehicle.setWheelSteering(i, i < 2 ? steerAngle : 0);
+            // Steering and suspension remain on Rapier's vehicle controller.
+            // Propulsion is applied to the chassis below so a missed wheel ray
+            // cannot leave the car permanently unable to accelerate.
+            this.vehicle.setWheelEngineForce(i, 0);
+            this.vehicle.setWheelBrake(i, brakeForce * (i >= 2 && this.input.handbrake > 0.1 ? 1.6 : 1));
+            this.vehicle.setWheelSideFrictionStiffness(i, i >= 2 ? rearGrip : this.tuning.sideFriction);
         }
 
-        // The wheel rays now start at the correct mounting height, so the
-        // suspension, tyre grip and rear-wheel propulsion all act on the road.
-        this.vehicle.updateVehicle(
-            dt,
-            this.RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC
-        );
+        this.vehicle.updateVehicle(dt, this.RAPIER.QueryFilterFlags?.EXCLUDE_DYNAMIC);
+
+        const drive = this.input.throttle > 0
+            ? (forwardSpeed < this.tuning.maxSpeed ? this.input.throttle * this.tuning.engineForce : 0)
+            : (forwardSpeed > -18 ? -this.input.reverse * this.tuning.engineForce * 0.62 : 0);
+        if (drive !== 0) {
+            this.body.addForce({ x: forward.x * drive, y: 0, z: forward.z * drive }, true);
+        }
+        if (brakeForce > 0 && Math.abs(forwardSpeed) > 0.15) {
+            const braking = brakeForce * Math.sign(forwardSpeed);
+            this.body.addForce({ x: -forward.x * braking, y: 0, z: -forward.z * braking }, true);
+        }
     }
 
     postStep() {
