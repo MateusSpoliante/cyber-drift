@@ -14,7 +14,7 @@ export class PhysicsWorld {
         this.disposed = false;
     }
 
-    createGround({ size = 2000, height = 0, friction = 1.2 } = {}) {
+    createGround({ size = 2000, height = -1, friction = 1.2 } = {}) {
         const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, height, 0));
         const collider = RAPIER.ColliderDesc.cuboid(size * 0.5, 0.1, size * 0.5)
             .setFriction(friction)
