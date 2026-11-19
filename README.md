@@ -62,3 +62,16 @@ Nunca coloque `DATABASE_URL` no HTML. As APIs validam entradas, usam consultas p
 
 ### Atualização: um recorde por jogador
 Se o banco já foi criado anteriormente, execute novamente o conteúdo atualizado de `db/schema.sql` no SQL Editor do Supabase. A migração preserva o melhor tempo de cada jogador e remove entradas duplicadas associadas ao mesmo perfil/dispositivo.
+
+## Variáveis de ambiente do Supabase
+
+Crie um arquivo `.env` na raiz do projeto, usando `.env.example` como modelo.
+
+- `DATABASE_URL`: Transaction Pooler (porta `6543`), utilizado pelas rotas da API.
+- `DIRECT_URL`: Session Pooler (porta `5432`), reservado para migrações ou tarefas administrativas. A API atual não consome essa variável.
+
+Substitua `[YOUR-PASSWORD]` pela senha atual do banco. Se a senha tiver caracteres especiais, faça URL-encoding antes de inseri-la na URI.
+
+Na Vercel, cadastre `DATABASE_URL` nas Environment Variables do ambiente Production (e também nos demais ambientes em que for testar). A aplicação publicada lê essa variável diretamente de `process.env.DATABASE_URL`; o arquivo `.env` local não é enviado automaticamente para a Vercel. Faça um novo deploy após alterar a variável.
+
+Não publique nem envie o arquivo `.env`. Ele está incluído no `.gitignore`; somente `.env.example`, sem credenciais reais, deve ser versionado.
