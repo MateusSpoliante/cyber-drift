@@ -95,3 +95,13 @@ Esses itens exigem infraestrutura, assets e trabalho adicional; não devem ser c
 
 - Removida a substituição do gerador de elementos da pista por malhas instanciadas, que introduzia uma falha de compatibilidade durante a montagem do mundo em algumas execuções.
 - Restaurado o modo de interpolação original do projeto; os novos pontos geográficos e as sete pistas continuam preservados.
+
+
+## Correções de inicialização e controles — 2026-11-24
+
+- Os listeners essenciais de autenticação, sessão e início da corrida são registrados antes da inicialização do renderizador 3D. Assim, uma falha de WebGL não deixa login e registro sem resposta.
+- A restauração da sessão e a atualização do ranking começam independentemente da inicialização gráfica.
+- As teclas de aceleração, freio, direção, drift e nitro são liberadas quando a janela perde o foco ou a aba fica oculta, evitando comandos presos após Alt+Tab.
+- O loop de animação verifica se renderizador, cena e câmera estão disponíveis antes de atualizar o quadro.
+- Em caso de falha do renderizador, a interface apresenta uma mensagem e desabilita o início da corrida, sem tentar inicializar a física em uma cena inexistente.
+- README reescrito para documentar a estrutura atual baseada em Vite, módulos Three.js e API serverless.
