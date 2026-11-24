@@ -2533,7 +2533,48 @@ import { VFXSystem } from './engine/VFXSystem.js';
                 }
             });
 
-            setupInputListeners();
+        }
+
+        let criticalUiListenersReady = false;
+        function setupCriticalUiListeners() {
+            if (criticalUiListenersReady) return;
+            criticalUiListenersReady = true;
+
+            // Libera aceleração, freio e direção após Alt+Tab ou perda de foco.
+            window.addEventListener('blur', clearInputKeys);
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) clearInputKeys();
+            });
+
+            // Login e sessão funcionam mesmo se o WebGL não puder ser iniciado.
+            document.getElementById('login-btn').addEventListener('click', () => authenticate('login'));
+            document.getElementById('register-btn').addEventListener('click', () => authenticate('register'));
+            document.getElementById('auth-password').addEventListener('keydown', e => {
+                if (e.key === 'Enter') authenticate('login');
+            });
+            document.getElementById('logout-btn').addEventListener('click', async () => {
+                try { await fetch('/api/auth', { method: 'DELETE' }); } catch {}
+                authToken = '';
+                updateStartButtonState();
+                document.getElementById('logout-btn').classList.add('hidden');
+                document.getElementById('auth-status').textContent = 'Você saiu da conta. Entre novamente para jogar.';
+                document.getElementById('auth-status').className = 'text-[11px] text-slate-400 mt-2';
+                document.getElementById('auth-password').value = '';
+            });
+
+            // Não tenta inicializar Rapier antes de a cena 3D estar pronta.
+            document.getElementById('start-btn').addEventListener('click', () => {
+                if (!renderer || !scene) {
+                    const status = document.getElementById('auth-status');
+                    if (status) {
+                        status.textContent = 'Os gráficos 3D não foram inicializados. Atualize a página ou tente outro navegador.';
+                        status.className = 'text-[11px] text-red-300 mt-2';
+                    }
+                    return;
+                }
+                if (!physicsReady) { void initializePhysics(); return; }
+                startTimeTrial();
+            });
         }
 
         function setupInputListeners() {
@@ -2611,23 +2652,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
             });
             document.getElementById('pause-exit-menu-btn').addEventListener('click', exitToMainMenu);
 
-            document.getElementById('start-btn').addEventListener('click', () => {
-                if (!physicsReady) { void initializePhysics(); return; }
-                startTimeTrial();
-            });
-            document.getElementById('login-btn').addEventListener('click', () => authenticate('login'));
-            document.getElementById('register-btn').addEventListener('click', () => authenticate('register'));
-            document.getElementById('auth-password').addEventListener('keydown', e => { if(e.key==='Enter') authenticate('login'); });
             document.getElementById('return-own-garage-btn').addEventListener('click', openGarage);
-            document.getElementById('logout-btn').addEventListener('click', async () => {
-                try { await fetch('/api/auth', {method:'DELETE'}); } catch {}
-                authToken = '';
-                updateStartButtonState();
-                document.getElementById('logout-btn').classList.add('hidden');
-                document.getElementById('auth-status').textContent = 'Você saiu da conta. Entre novamente para jogar.';
-                document.getElementById('auth-status').className = 'text-[11px] text-slate-400 mt-2';
-                document.getElementById('auth-password').value = '';
-            });
             document.getElementById('track-select').value = selectedTrackId;
             document.getElementById('track-select').addEventListener('change', e => selectTrack(e.target.value));
             document.getElementById('open-garage-btn').addEventListener('click', openGarage);
@@ -2732,6 +2757,7 @@ import { VFXSystem } from './engine/VFXSystem.js';
         }
         function animate(now) {
             requestAnimationFrame(animate);
+            if (!renderer || !scene || !camera) return;
             if (!prevFrameTime) prevFrameTime = now;
             const dt = Math.min(0.05, (now - prevFrameTime) / 1000);
             prevFrameTime = now;
@@ -2834,17 +2860,30 @@ import { VFXSystem } from './engine/VFXSystem.js';
             if (bootStarted) return;
             bootStarted = true;
             const authStatus = document.getElementById('auth-status');
+
+            // Registra primeiro os controles que não dependem da cena 3D.
+            setupCriticalUiListeners();
+            void restoreSession();
+            void refreshRecordsFromApi();
+
             try {
                 initThree();
+                setupInputListeners();
                 startRenderLoop();
             } catch (error) {
                 console.error('[Cyber Drift] Falha ao iniciar o renderizador:', error);
-                if (authStatus) { authStatus.textContent = `Falha ao iniciar gráficos: ${error?.message || error}`; authStatus.className = 'text-[11px] text-red-300 mt-2'; }
+                if (authStatus) {
+                    authStatus.textContent = `Falha ao iniciar gráficos: ${error?.message || error}`;
+                    authStatus.className = 'text-[11px] text-red-300 mt-2';
+                }
+                const startButton = document.getElementById('start-btn');
+                if (startButton) {
+                    startButton.disabled = true;
+                    startButton.textContent = 'GRÁFICOS INDISPONÍVEIS';
+                }
                 return;
             }
-            // Login restoration must run even when Rapier fails to initialize.
-            void restoreSession();
-            void refreshRecordsFromApi();
+
             await initializePhysics();
         }
 
