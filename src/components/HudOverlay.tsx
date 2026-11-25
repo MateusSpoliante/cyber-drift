@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, RotateCcw, Sliders, Trophy, Activity, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Camera, RotateCcw, Trophy, Activity, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { CameraMode, CarSnapshot } from '../types/sim';
 import { formatDeltaTicks, formatLapTicks } from '../telemetry/formatters';
 
@@ -8,7 +8,6 @@ interface HudOverlayProps {
   cameraMode: CameraMode;
   onToggleCamera: () => void;
   onResetLap: () => void;
-  onOpenSetup: () => void;
   onOpenLeaderboard: () => void;
 }
 
@@ -17,7 +16,6 @@ export const HudOverlay: React.FC<HudOverlayProps> = ({
   cameraMode,
   onToggleCamera,
   onResetLap,
-  onOpenSetup,
   onOpenLeaderboard,
 }) => {
   if (!snapshot) return null;
@@ -129,14 +127,6 @@ export const HudOverlay: React.FC<HudOverlayProps> = ({
           >
             <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
             RESET (R)
-          </button>
-
-          <button
-            onClick={onOpenSetup}
-            className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/85 px-3 py-2 text-xs font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-900 transition"
-          >
-            <Sliders className="h-3.5 w-3.5 text-emerald-400" />
-            SETUP
           </button>
 
           <button
