@@ -455,8 +455,8 @@ export class FormulaScene {
     this.carBodyGroup.rotation.x = snapshot.pitch;
 
     // Front wheel steering + rotation
-    this.frontLeftWheel.rotation.y = -snapshot.steerAngle * 0.42;
-    this.frontRightWheel.rotation.y = -snapshot.steerAngle * 0.42;
+    this.frontLeftWheel.rotation.y = snapshot.steerAngle * 0.42;
+    this.frontRightWheel.rotation.y = snapshot.steerAngle * 0.42;
     this.frontLeftWheel.children[0].rotation.x = -snapshot.wheelSpinFL;
     this.frontRightWheel.children[0].rotation.x = -snapshot.wheelSpinFR;
     this.rearLeftWheel.rotation.x = -snapshot.wheelSpinRL;
@@ -484,7 +484,7 @@ export class FormulaScene {
         .clone()
         .add(new THREE.Vector3(0, 0.78, 0))
         .addScaledVector(forward, 0.18)
-        .addScaledVector(right, snapshot.steerAngle * 0.08);
+        .addScaledVector(right, -snapshot.steerAngle * 0.08);
       const lookTarget = eye.clone().addScaledVector(forward, 35).add(new THREE.Vector3(0, -0.8, 0));
       this.camera.position.copy(eye);
       this.camera.lookAt(lookTarget);
