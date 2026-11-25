@@ -79,8 +79,8 @@ export class InputManager {
     // The vehicle's positive yaw points left in world space; invert the
     // player command so pressing right steers the car to the right.
     let targetSteer = 0;
-    if (left) targetSteer += 1;
-    if (right) targetSteer -= 1;
+    if (left) targetSteer -= 1;
+    if (right) targetSteer += 1;
 
     const steerRate = targetSteer !== 0 ? 5.5 : 8.5;
     if (this.steerValue < targetSteer) {
@@ -109,7 +109,7 @@ export class InputManager {
       const rawAxis = gp.axes[0] || 0;
       if (Math.abs(rawAxis) > deadzone) {
         const norm = (Math.abs(rawAxis) - deadzone) / (1 - deadzone);
-        steer = -Math.sign(rawAxis) * Math.pow(norm, 1.35);
+        steer = Math.sign(rawAxis) * Math.pow(norm, 1.15);
       }
       // RT (button 7) & LT (button 6)
       const rt = gp.buttons[7]?.value || 0;
