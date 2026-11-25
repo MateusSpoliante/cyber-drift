@@ -455,7 +455,7 @@ export class SimCore {
         this.currentLapTelemetry.push({
           tick: this.lapTimeTicks,
           timeSec: this.lapTimeTicks / FIXED_HZ,
-          speedKmh: Math.abs(this.vz) * 3.6,
+          speedKmh: Math.hypot(this.vx, this.vz) * 3.6,
           rpm: Math.round(this.rpm),
           gear: this.gear,
           throttle: Math.round(this.smoothThrottle * 100),
@@ -536,7 +536,7 @@ export class SimCore {
       roll: this.roll,
       vx: this.vx,
       vz: this.vz,
-      speedKmh: Math.abs(this.vz) * 3.6,
+      speedKmh: Math.hypot(this.vx, this.vz) * 3.6,
       rpm: this.rpm,
       gear: this.gear,
       steerAngle: this.smoothSteer,
@@ -568,18 +568,42 @@ export class SimCore {
   }
 
   public getInterpolatedGhost(lapTicks: number): GhostFrame | null {
-    if (this.bestLapGhost.length < 2) return null;
-    const idx = Math.floor(lapTicks / 8);
-    if (idx < 0 || idx >= this.bestLapGhost.length - 1) return null;
-    const f0 = this.bestLapGhost[idx];
-    const f1 = this.bestLapGhost[idx + 1];
-    const alpha = (lapTicks - f0.tick) / Math.max(1, f1.tick - f0.tick);
+    const frames = this.bestLapGhost;
+    if (frames.length < 2 || lapTicks < frames[0].tick || lapTicks > frames[frames.length - 1].tick) {
+      return null;
+    }
+
+    // Find the first recorded frame at or after the requested simulation tick.
+    let low = 0;
+    let high = frames.length - 1;
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2);
+      if (frames[mid].tick < lapTicks) low = mid + 1;
+      else high = mid;
+    }
+
+    const nextIndex = low;
+    if (nextIndex === 0) return { ...frames[0], tick: lapTicks };
+
+    const f0 = frames[nextIndex - 1];
+    const f1 = frames[nextIndex];
+    const alpha = clamp(
+      (lapTicks - f0.tick) / Math.max(1, f1.tick - f0.tick),
+      0,
+      1
+    );
+    const yawDelta = Math.atan2(
+      Math.sin(f1.yaw - f0.yaw),
+      Math.cos(f1.yaw - f0.yaw)
+    );
+
     return {
       tick: lapTicks,
       x: lerp(f0.x, f1.x, alpha),
       y: lerp(f0.y, f1.y, alpha),
       z: lerp(f0.z, f1.z, alpha),
-      yaw: lerp(f0.yaw, f1.yaw, alpha),
+      // Interpolate the shortest angular path across the -PI/PI boundary.
+      yaw: f0.yaw + yawDelta * alpha,
       roll: lerp(f0.roll, f1.roll, alpha),
       steerAngle: lerp(f0.steerAngle, f1.steerAngle, alpha),
     };
