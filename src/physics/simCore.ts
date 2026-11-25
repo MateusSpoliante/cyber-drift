@@ -1,7 +1,7 @@
 import { CarSetup, CarSnapshot, GhostFrame, QuantizedInput, SurfaceType, TelemetrySample } from '../types/sim';
 import { CircuitData } from '../track/monzaTrack';
 
-export const PHYSICS_VERSION = '0.1.0-ts-det';
+export const PHYSICS_VERSION = '0.2.0-arcade';
 export const FIXED_HZ = 240;
 export const DT = 1 / FIXED_HZ;
 
@@ -277,7 +277,7 @@ export class SimCore {
     }
 
     // Peak longitudinal tire capacity on rear axle
-    const muBase = 1.72 * surfaceGrip * tirePressureGrip;
+    const muBase = 2.15 * surfaceGrip * tirePressureGrip;
     const maxRearTraction = normalLoadRear * muBase;
 
     if (Math.abs(driveForce) > maxRearTraction) {
@@ -329,7 +329,7 @@ export class SimCore {
 
     // 7. Lateral Dynamics (Bicycle + Pacejka Cornering Stiffness + Friction Ellipse)
     // Speed-sensitive steering lock (24 deg at slow hairpins, tighter at 300+ km/h)
-    const maxSteerRad = lerp(0.42, 0.13, clamp(speed / 85, 0, 1));
+    const maxSteerRad = lerp(0.52, 0.24, clamp(speed / 90, 0, 1));
     const steerAngle = this.smoothSteer * maxSteerRad;
 
     const a = this.wheelbase * (1 - this.frontWeightDist); // CG to front axle
@@ -352,14 +352,14 @@ export class SimCore {
       const availLatRear = Math.sqrt(Math.max(0.08, 1 - rearUsedLong * rearUsedLong));
 
       // Diff lock affects rear yaw damping under throttle
-      const diffStability = 1.0 + (this.setup.diffOnThrottle - 70) * 0.0025 * this.smoothThrottle;
+      const diffStability = 1.08;
 
-      fyFront = -pacejka(alphaFront, 11.5, 1.45, normalLoadFront * muBase * availLatFront, 0.35);
-      fyRear = -pacejka(alphaRear, 12.2, 1.48, normalLoadRear * muBase * availLatRear * diffStability, 0.35);
+      fyFront = -pacejka(alphaFront, 14.0, 1.35, normalLoadFront * muBase * availLatFront, 0.20);
+      fyRear = -pacejka(alphaRear, 14.5, 1.35, normalLoadRear * muBase * availLatRear * diffStability, 0.20);
     } else {
       this.slipAngle = 0;
-      this.vx *= 0.85;
-      this.yawRate *= 0.85;
+      this.vx *= 0.72;
+      this.yawRate *= 0.72;
     }
 
     const netLatForce = fyFront * Math.cos(steerAngle) + fyRear;
