@@ -5,7 +5,6 @@ import { FormulaScene } from './render/formulaScene';
 import { InputManager } from './input/inputManager';
 import { CameraMode, CarSetup, CarSnapshot, GhostFrame, LapRecord } from './types/sim';
 import { HudOverlay } from './components/HudOverlay';
-import { SetupModal } from './components/SetupModal';
 import { LeaderboardModal } from './components/LeaderboardModal';
 import { formatLapTicks } from './telemetry/formatters';
 import { PHYSICS_VERSION } from './physics/simCore';
@@ -37,7 +36,6 @@ export function App() {
   const [snapshot, setSnapshot] = useState<CarSnapshot | null>(null);
   const [cameraMode, setCameraMode] = useState<CameraMode>('tcam');
   const [setup, setSetup] = useState<CarSetup>(DEFAULT_SETUP);
-  const [showSetup, setShowSetup] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [lapBanner, setLapBanner] = useState<{ text: string; valid: boolean } | null>(null);
 
@@ -168,11 +166,6 @@ export function App() {
     };
   }, [started]);
 
-  const handleSetupChange = (next: CarSetup) => {
-    setSetup(next);
-    workerRef.current?.postMessage({ type: 'UPDATE_SETUP', setup: next });
-  };
-
   const handleToggleCamera = () => {
     if (!sceneRef.current) return;
     const modes: CameraMode[] = ['tcam', 'cockpit', 'chase'];
@@ -194,21 +187,19 @@ export function App() {
             APEX-01 <span className="text-red-500">MONZA</span>
           </h1>
           <p className="mt-2 text-sm text-zinc-400 leading-relaxed">
-            Simulador de Time Trial com física determinística em passo fixo de{' '}
-            <strong className="text-zinc-200">240 Hz</strong> em Web Worker dedicado, modelo de
-            pneus Pacejka, aerodinâmica ajustável, Ghost Car e gravação de telemetria.
+            Jogo de corrida estilo arcade: acelere, freie e faça curvas com controles simples. Supere seu melhor tempo em Monza.
           </p>
 
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             <div className="rounded-xl border border-zinc-800/90 bg-zinc-900/60 p-3.5">
               <Cpu className="h-4 w-4 text-sky-400 mb-1.5" />
-              <div className="font-bold text-zinc-200">240 Hz Worker</div>
-              <div className="text-zinc-500 mt-0.5">Física desacoplada do FPS</div>
+              <div className="font-bold text-zinc-200">CONTROLES SIMPLES</div>
+              <div className="text-zinc-500 mt-0.5">Acelere e faça curvas</div>
             </div>
             <div className="rounded-xl border border-zinc-800/90 bg-zinc-900/60 p-3.5">
               <Gauge className="h-4 w-4 text-emerald-400 mb-1.5" />
-              <div className="font-bold text-zinc-200">Pacejka + Aero</div>
-              <div className="text-zinc-500 mt-0.5">Setup completo de asas e freios</div>
+              <div className="font-bold text-zinc-200">DIREÇÃO ARCADE</div>
+              <div className="text-zinc-500 mt-0.5">Carro mais fácil de controlar</div>
             </div>
             <div className="rounded-xl border border-zinc-800/90 bg-zinc-900/60 p-3.5">
               <Flag className="h-4 w-4 text-amber-400 mb-1.5" />
@@ -264,17 +255,8 @@ export function App() {
         cameraMode={cameraMode}
         onToggleCamera={handleToggleCamera}
         onResetLap={() => workerRef.current?.postMessage({ type: 'RESET' })}
-        onOpenSetup={() => setShowSetup(true)}
         onOpenLeaderboard={() => setShowLeaderboard(true)}
       />
-
-      {showSetup && (
-        <SetupModal
-          setup={setup}
-          onChange={handleSetupChange}
-          onClose={() => setShowSetup(false)}
-        />
-      )}
 
       {showLeaderboard && (
         <LeaderboardModal
