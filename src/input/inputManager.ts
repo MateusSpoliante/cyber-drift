@@ -18,14 +18,34 @@ export class InputManager {
   constructor() {
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('keyup', this.handleKeyUp);
+    window.addEventListener('blur', this.handleWindowBlur);
   }
 
   public destroy(): void {
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
+    window.removeEventListener('blur', this.handleWindowBlur);
   }
 
+  private handleWindowBlur = () => {
+    // Prevent stuck throttle/steering when the browser loses focus before keyup.
+    this.keys.clear();
+    this.steerValue = 0;
+    this.throttleValue = 0;
+    this.brakeValue = 0;
+    this.pendingGearReq = 0;
+  };
+
   private handleKeyDown = (e: KeyboardEvent) => {
+    const target = e.target;
+    if (
+      target instanceof HTMLElement &&
+      (target.isContentEditable ||
+        target.closest('input, textarea, select, button, [role="button"]'))
+    ) {
+      return;
+    }
+
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
       e.preventDefault();
     }
@@ -56,9 +76,11 @@ export class InputManager {
     const up = this.keys.has('KeyW') || this.keys.has('ArrowUp');
     const down = this.keys.has('KeyS') || this.keys.has('ArrowDown');
 
+    // The vehicle's positive yaw points left in world space; invert the
+    // player command so pressing right steers the car to the right.
     let targetSteer = 0;
-    if (left) targetSteer -= 1;
-    if (right) targetSteer += 1;
+    if (left) targetSteer += 1;
+    if (right) targetSteer -= 1;
 
     const steerRate = targetSteer !== 0 ? 5.5 : 8.5;
     if (this.steerValue < targetSteer) {
@@ -87,7 +109,7 @@ export class InputManager {
       const rawAxis = gp.axes[0] || 0;
       if (Math.abs(rawAxis) > deadzone) {
         const norm = (Math.abs(rawAxis) - deadzone) / (1 - deadzone);
-        steer = Math.sign(rawAxis) * Math.pow(norm, 1.35);
+        steer = -Math.sign(rawAxis) * Math.pow(norm, 1.35);
       }
       // RT (button 7) & LT (button 6)
       const rt = gp.buttons[7]?.value || 0;
